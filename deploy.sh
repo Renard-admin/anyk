@@ -5,7 +5,7 @@ set -euo pipefail
 
 APP_DIR="/opt/anyk"
 APP_USER="anyk"
-REPO_URL="${REPO_URL:-}"   # optional: set to your GitHub URL to clone
+REPO_URL="${REPO_URL:-https://github.com/Renard-admin/anyk.git}"
 PORT=8000
 
 log() { echo -e "\n\033[1;32m>>> $*\033[0m"; }
@@ -78,7 +78,7 @@ User=$APP_USER
 WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
 ExecStart=$APP_DIR/.venv/bin/uvicorn main:app --host 127.0.0.1 --port $PORT --workers 1
-Restart=on-failure
+Restart=always
 RestartSec=5
 # Prevent a single worker from hogging RAM
 MemoryMax=900M
