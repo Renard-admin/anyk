@@ -4,8 +4,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-api_key = os.environ.get("ANTHROPIC_API_KEY") or ""
-needs_api = pytest.mark.skipif(not api_key, reason="ANTHROPIC_API_KEY not set")
+api_key = os.environ.get("GEMINI_API_KEY") or ""
+needs_api = pytest.mark.skipif(not api_key, reason="GEMINI_API_KEY not set")
 
 from analyzer.llm_analyzer import analyze_consistency, _parse_signals, _validate_signals
 

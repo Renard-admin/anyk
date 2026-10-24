@@ -190,8 +190,8 @@ if __name__ == "__main__":
     use_llm = not args.no_llm
 
     # Auto-detect: if no API key, disable LLM silently
-    if use_llm and not os.environ.get("ANTHROPIC_API_KEY"):
-        print("INFO: ANTHROPIC_API_KEY not set — running without LLM.")
+    if use_llm and not os.environ.get("GEMINI_API_KEY"):
+        print("INFO: GEMINI_API_KEY not set — running without LLM.")
         use_llm = False
 
     print(f"Running evaluation on {IMAGES_DIR}")

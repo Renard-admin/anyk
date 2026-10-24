@@ -11,12 +11,12 @@
 git clone <repo-url>
 cd anyk
 pip install -r requirements.txt
-cp .env.example .env  # добавь ANTHROPIC_API_KEY (опционально)
+cp .env.example .env  # добавь GEMINI_API_KEY (опционально)
 uvicorn main:app --reload
 # Открой http://localhost:8000
 ```
 
-> Без `ANTHROPIC_API_KEY` система работает на structural-проверках (без LLM).
+> Без `GEMINI_API_KEY` система работает на structural-проверках (без LLM).
 
 ## Поддерживаемые форматы
 
@@ -44,7 +44,7 @@ uvicorn main:app --reload
   - Нестандартный формат телефона (не KZ)
   - Ключевые слова казино / ставок
   - Ключевые слова пирамид / розыгрышей
-- **LLM-анализ** — Claude 3.5 Haiku: семантическая согласованность с контекстом переписки
+- **LLM-анализ** — Gemini 2.0 Flash Lite: семантическая согласованность с контекстом переписки
 - **PDF metadata** — Author, Producer, CreationDate / ModDate
 - **Risk scoring** — CLEAR / MEDIUM / HIGH / UNCERTAIN
 - **Подробный отчёт** — сигналы, доказательства, метаданные, ограничения, следующие шаги
@@ -59,7 +59,7 @@ uvicorn main:app --reload
 
 ## Стек
 
-Python · FastAPI · EasyOCR · PyMuPDF · Claude API (Anthropic) · Pillow · OpenCV · Vanilla JS
+Python · FastAPI · EasyOCR · PyMuPDF · Gemini API (Google) · Pillow · OpenCV · Vanilla JS
 
 ## Метрики (синтетический датасет, без LLM)
 
@@ -99,7 +99,7 @@ anyk/
 │   ├── preprocessor.py         # Pillow + OpenCV CLAHE
 │   ├── ocr_engine.py           # EasyOCR singleton
 │   ├── structural_checker.py   # 5 типов детерминированных проверок
-│   ├── llm_analyzer.py         # Claude 3.5 Haiku, strict JSON schema
+│   ├── llm_analyzer.py         # Gemini 2.0 Flash Lite, strict JSON schema
 │   ├── risk_scorer.py          # CLEAR/MEDIUM/HIGH/UNCERTAIN
 │   └── report_builder.py       # Сборка отчёта + PDF metadata
 ├── templates/
