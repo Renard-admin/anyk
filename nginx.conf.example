@@ -1,0 +1,40 @@
+server {
+    listen 80;
+    server_name _;          # replace with your domain or IP
+
+    # Accept large PDF / image uploads
+    client_max_body_size 20M;
+
+    # Generous timeouts — OCR on 1 vCPU can take 30-60 s
+    proxy_read_timeout    120s;
+    proxy_connect_timeout  10s;
+    proxy_send_timeout    120s;
+
+    # Forward all requests to Uvicorn
+    location / {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket / keep-alive support
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Static files served directly by Nginx (bypasses Python entirely)
+    location /static/ {
+        alias /opt/anyk/static/;
+        expires 7d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Gzip for text assets
+    gzip on;
+    gzip_types text/plain text/css application/javascript application/json
+               image/svg+xml;
+    gzip_min_length 1024;
+}
