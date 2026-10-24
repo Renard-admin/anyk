@@ -1,0 +1,215 @@
+[
+  {
+    "filename": "img_001.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Асель Касымова"
+  },
+  {
+    "filename": "img_002.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Марат Джаксыбеков"
+  },
+  {
+    "filename": "img_003.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Иван Петров"
+  },
+  {
+    "filename": "img_004.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Динара Абенова"
+  },
+  {
+    "filename": "img_005.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Алексей Смирнов"
+  },
+  {
+    "filename": "img_006.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Жанар Сатыбалди"
+  },
+  {
+    "filename": "img_007.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Светлана Ким"
+  },
+  {
+    "filename": "img_008.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Арман Телеулов"
+  },
+  {
+    "filename": "img_009.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Наталья Соколова"
+  },
+  {
+    "filename": "img_010.png",
+    "label": "consistent",
+    "expected_signals": [],
+    "description": "Валидный чек, отправитель Айдана Сарсенова"
+  },
+  {
+    "filename": "img_011.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_IMPOSSIBLE"
+    ],
+    "description": "Невозможная дата: 31 февраля 2024 г."
+  },
+  {
+    "filename": "img_012.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_IMPOSSIBLE"
+    ],
+    "description": "Невозможная дата: 31 ноября 2024 г."
+  },
+  {
+    "filename": "img_013.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_IMPOSSIBLE"
+    ],
+    "description": "Невозможная дата: 30 февраля 2024 г."
+  },
+  {
+    "filename": "img_014.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_FUTURE"
+    ],
+    "description": "Дата в будущем: 15 марта 2027 г."
+  },
+  {
+    "filename": "img_015.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_FUTURE"
+    ],
+    "description": "Дата в будущем: 01 января 2030 г."
+  },
+  {
+    "filename": "img_016.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "DATE_FUTURE"
+    ],
+    "description": "Дата в будущем: 20 декабря 2028 г."
+  },
+  {
+    "filename": "img_017.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_UNREALISTIC_HIGH",
+      "AMOUNT_UNREALISTIC_LOW"
+    ],
+    "description": "Нереальная сумма: 0 тг"
+  },
+  {
+    "filename": "img_018.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_UNREALISTIC_HIGH",
+      "AMOUNT_UNREALISTIC_LOW"
+    ],
+    "description": "Нереальная сумма: 500 000 000 тг"
+  },
+  {
+    "filename": "img_019.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_UNREALISTIC_HIGH",
+      "AMOUNT_UNREALISTIC_LOW"
+    ],
+    "description": "Нереальная сумма: 0.50 тг"
+  },
+  {
+    "filename": "img_020.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "CASINO_KEYWORDS_DETECTED"
+    ],
+    "description": "Казино/ставки: Выигрыш в казино"
+  },
+  {
+    "filename": "img_021.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "CASINO_KEYWORDS_DETECTED"
+    ],
+    "description": "Казино/ставки: Бонус за депозит"
+  },
+  {
+    "filename": "img_022.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "CASINO_KEYWORDS_DETECTED"
+    ],
+    "description": "Казино/ставки: Выигрыш по ставке"
+  },
+  {
+    "filename": "img_023.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_CONTEXT_MISMATCH"
+    ],
+    "description": "Одинаковое время 14:32 у разных переводов"
+  },
+  {
+    "filename": "img_024.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_CONTEXT_MISMATCH"
+    ],
+    "description": "Одинаковое время 14:32 у разных переводов"
+  },
+  {
+    "filename": "img_025.png",
+    "label": "inconsistent",
+    "expected_signals": [
+      "AMOUNT_CONTEXT_MISMATCH"
+    ],
+    "description": "Одинаковое время 14:32 у разных переводов"
+  },
+  {
+    "filename": "img_026.png",
+    "label": "neutral",
+    "expected_signals": [],
+    "description": "Переписка без платёжных данных"
+  },
+  {
+    "filename": "img_027.png",
+    "label": "neutral",
+    "expected_signals": [],
+    "description": "Переписка без платёжных данных"
+  },
+  {
+    "filename": "img_028.png",
+    "label": "neutral",
+    "expected_signals": [],
+    "description": "Переписка без платёжных данных"
+  },
+  {
+    "filename": "img_029.png",
+    "label": "neutral",
+    "expected_signals": [],
+    "description": "Переписка без платёжных данных"
+  },
+  {
+    "filename": "img_030.png",
+    "label": "neutral",
+    "expected_signals": [],
+    "description": "Переписка без платёжных данных"
+  }
+]

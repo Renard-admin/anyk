@@ -1,0 +1,23 @@
+{
+  "precision": 1.0,
+  "recall": 0.8,
+  "false_positive_rate": 0.0,
+  "accuracy": 0.88,
+  "total_samples": 30,
+  "uncertain_skipped": 5,
+  "llm_used": false,
+  "confusion_matrix": {
+    "TP": 12,
+    "FP": 0,
+    "TN": 10,
+    "FN": 3
+  },
+  "per_signal_stats": {
+    "DATE_IMPOSSIBLE": 3,
+    "DATE_FUTURE": 3,
+    "AMOUNT_UNREALISTIC_LOW": 2,
+    "PHONE_FORMAT_UNUSUAL": 1,
+    "CASINO_KEYWORDS_DETECTED": 3,
+    "PYRAMID_KEYWORDS_DETECTED": 1
+  }
+}

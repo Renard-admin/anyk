@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>АНЫҚ — Анализ платёжного документа</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="АНЫҚ">
+  <link rel="apple-touch-icon" href="/static/icon.svg">
+
+  <!-- SEO / OG -->
+  <meta name="description" content="Предварительная техническая проверка платёжных чеков Kaspi.kz на признаки несоответствий">
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- PWA Install Banner (shown via JS) -->
+<div id="installBanner" class="install-banner" hidden>
+  <span>📱 <strong>Установите АНЫҚ</strong> как приложение — принимайте чеки прямо из Telegram</span>
+  <div style="display:flex;gap:8px;flex-shrink:0">
+    <button class="btn-install" id="installBtn">Установить</button>
+    <button class="btn-install-dismiss" id="installDismiss" aria-label="Закрыть">✕</button>
+  </div>
+</div>
+
+<header class="header">
+  <div class="container header-inner">
+    <a href="/" class="logo">
+      <img src="/static/logo.png" alt="" class="logo-mark" aria-hidden="true">
+      <span class="logo-name">АНЫҚ</span>
+      <span class="logo-tagline">/ SafeNet KZ</span>
+    </a>
+    <div class="header-actions">
+      <nav class="a11y-bar" aria-label="Доступность">
+        <button class="a11y-btn" id="a11yLarge" title="Увеличить текст" aria-pressed="false">Аа+</button>
+        <button class="a11y-btn" id="a11yReset" title="Обычный режим">Сброс</button>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<!-- Legal modal / Disclaimer -->
+<div class="modal-backdrop" id="termsModal" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
+  <div class="modal-box">
+    <h2 class="modal-title" id="termsTitle">Уведомление об ограничениях</h2>
+    <div class="modal-body">
+      <p>Инструмент «АНЫҚ» предназначен исключительно для автоматизации предварительного технического анализа платёжных документов. Система выполняет вспомогательную функцию и не является экспертным юридическим или финансовым заключением. Сервис и его разработчики не несут ответственности за любые решения, принятые пользователем на основе результатов анализа.</p>
+    </div>
+    <button class="btn-primary modal-accept" id="termsAccept">Я согласен(на) и продолжить</button>
+  </div>
+</div>
+
+<main class="main">
+  <div class="container upload-container">
+
+    <div id="formSection">
+      <h1 class="page-title">Анализ платёжного документа</h1>
+      <p class="page-subtitle">Загрузите скриншот или PDF-чек — система извлечёт данные и покажет список сигналов несоответствия.</p>
+
+      <form id="analyzeForm">
+        <!-- Upload zone -->
+        <div class="upload-zone" id="uploadZone" tabindex="0" role="button"
+             aria-label="Зона загрузки файла. Нажмите Enter или пробел для выбора файла.">
+          <input type="file" id="fileInput"
+                 accept="image/png,image/jpeg,image/webp,application/pdf,.pdf"
+                 aria-label="Выбрать изображение или PDF"
+                 tabindex="-1">
+
+          <!-- Placeholder state -->
+          <div class="upload-placeholder" id="uploadPlaceholder">
+            <div class="upload-icon-wrap">
+              <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="16 16 12 12 8 16"></polyline>
+                <line x1="12" y1="12" x2="12" y2="21"></line>
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path>
+              </svg>
+            </div>
+            <span class="upload-text">Перетащите файл или нажмите для выбора</span>
+            <span class="upload-hint">PNG · JPG · WEBP · PDF &nbsp;·&nbsp; до 20 МБ</span>
+            <div class="upload-paste-hint" id="pasteHint">
+              <kbd>Ctrl+V</kbd> — вставить скопированный скриншот
+              <button type="button" class="btn-paste" id="pasteBtn" aria-label="Вставить из буфера обмена">Вставить</button>
+            </div>
+          </div>
+
+          <!-- Preview state -->
+          <div class="upload-preview" id="uploadPreview">
+            <img id="previewImg" src="" alt="Превью изображения" hidden>
+            <div class="pdf-preview-icon" id="pdfPreviewIcon" hidden>
+              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="1.5"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+              </svg>
+              <span class="pdf-label">PDF</span>
+            </div>
+            <span class="file-name" id="fileName"></span>
+            <button type="button" class="remove-btn" id="removeBtn" aria-label="Удалить файл">
+              Удалить
+            </button>
+          </div>
+        </div>
+
+        <!-- Mobile camera capture -->
+        <div class="mobile-capture" id="mobileCaptureHint">
+          <button type="button" class="btn-camera" id="cameraBtn" aria-label="Сфотографировать документ">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 0 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+              <circle cx="12" cy="13" r="4"></circle>
+            </svg>
+            Сфотографировать
+          </button>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment"
+                 aria-label="Камера" style="display:none">
+        </div>
+
+        <!-- Context -->
+        <div class="field">
+          <label for="contextInput">Контекст переписки (необязательно)</label>
+          <textarea id="contextInput" name="context" rows="3"
+            placeholder="Вставьте текст переписки вокруг скриншота..."></textarea>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn-primary" id="submitBtn" disabled>
+          Проанализировать →
+        </button>
+
+        <!-- Error message -->
+        <div class="upload-error" id="uploadError" hidden role="alert" aria-live="polite"></div>
+
+        <!-- Disclaimer -->
+        <div class="disclaimer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+               fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span>Система выявляет признаки несоответствия, а не устанавливает факт мошенничества. Решение принимает аналитик.</span>
+        </div>
+      </form>
+    </div>
+
+    <!-- Progress screen -->
+    <div class="progress-screen" id="progressScreen" hidden aria-live="polite">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="progress-title">Анализируем документ...</p>
+      <div class="progress-steps" role="list">
+        <div class="progress-step" id="step1" role="listitem">
+          <span class="step-num" aria-hidden="true">1</span>
+          <span class="step-dot" aria-hidden="true"></span>
+          <span>Считывание структуры и OCR</span>
+        </div>
+        <div class="progress-step" id="step2" role="listitem">
+          <span class="step-num" aria-hidden="true">2</span>
+          <span class="step-dot" aria-hidden="true"></span>
+          <span>Сканирование метаданных PDF</span>
+        </div>
+        <div class="progress-step" id="step3" role="listitem">
+          <span class="step-num" aria-hidden="true">3</span>
+          <span class="step-dot" aria-hidden="true"></span>
+          <span>Анализ рисков и геометрии</span>
+        </div>
+        <div class="progress-step" id="step4" role="listitem">
+          <span class="step-num" aria-hidden="true">4</span>
+          <span class="step-dot" aria-hidden="true"></span>
+          <span>Формирование отчёта</span>
+        </div>
+      </div>
+      <p class="progress-hint">Обычно занимает 10–25 секунд</p>
+    </div>
+
+  </div>
+</main>
+
+<script src="/static/app.js"></script>
+<script>
+// ── Terms modal ───────────────────────────────────────────────────────────────
+(function() {
+  const TERMS_KEY = 'anyk_disclaimer_accepted';
+  const modal     = document.getElementById('termsModal');
+  const acceptBtn = document.getElementById('termsAccept');
+  let   accepted  = false;
+  try { accepted = localStorage.getItem(TERMS_KEY) === 'true'; } catch {}
+
+  function openModal()  { modal.hidden = false; acceptBtn.focus(); document.body.style.overflow = 'hidden'; }
+  function closeModal() { modal.hidden = true;  document.body.style.overflow = ''; }
+
+  if (acceptBtn) {
+    acceptBtn.addEventListener('click', () => {
+      try { localStorage.setItem(TERMS_KEY, 'true'); } catch {}
+      accepted = true;
+      closeModal();
+      document.getElementById('analyzeForm').dispatchEvent(new Event('_termsAccepted'));
+    });
+  }
+  modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  const form = document.getElementById('analyzeForm');
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      if (!accepted) { e.preventDefault(); e.stopImmediatePropagation(); openModal(); }
+    }, true);
+    form.addEventListener('_termsAccepted', () => {
+      form.requestSubmit ? form.requestSubmit(document.getElementById('submitBtn')) : form.submit();
+    });
+  }
+
+  // Show share-error feedback if redirected from share-target
+  const sp = new URLSearchParams(location.search);
+  const shareErr = sp.get('share_error');
+  if (shareErr) {
+    const el = document.getElementById('uploadError');
+    if (el) {
+      const msgs = { no_file: 'Файл не был передан из приложения.', too_large: 'Переданный файл слишком большой (> 20 МБ).', format: 'Формат файла не поддерживается.', empty: 'Файл пустой или повреждён.' };
+      el.textContent = msgs[shareErr] || `Ошибка при получении файла из приложения (${shareErr}).`;
+      el.hidden = false;
+    }
+  }
+})();
+
+// ── Accessibility toolbar ─────────────────────────────────────────────────────
+(function() {
+  const LARGE_KEY = 'anyk_large_text';
+  function applyLarge(on) {
+    document.documentElement.classList.toggle('a11y-large', on);
+    try { localStorage.setItem(LARGE_KEY, on ? '1' : '0'); } catch {}
+    const btn = document.getElementById('a11yLarge');
+    if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  try { if (localStorage.getItem(LARGE_KEY) === '1') applyLarge(true); } catch {}
+  const btnL = document.getElementById('a11yLarge');
+  const btnR = document.getElementById('a11yReset');
+  if (btnL) btnL.addEventListener('click', () => applyLarge(true));
+  if (btnR) btnR.addEventListener('click', () => applyLarge(false));
+})();
+
+// ── PWA Install prompt ────────────────────────────────────────────────────────
+(function() {
+  let deferredPrompt = null;
+  const banner     = document.getElementById('installBanner');
+  const installBtn = document.getElementById('installBtn');
+  const dismissBtn = document.getElementById('installDismiss');
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    try { if (localStorage.getItem('anyk_pwa_dismissed') === '1') return; } catch {}
+    if (banner) banner.hidden = false;
+  });
+
+  if (installBtn) {
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      if (banner) banner.hidden = true;
+    });
+  }
+  if (dismissBtn) {
+    dismissBtn.addEventListener('click', () => {
+      if (banner) banner.hidden = true;
+      try { localStorage.setItem('anyk_pwa_dismissed', '1'); } catch {}
+    });
+  }
+
+  window.addEventListener('appinstalled', () => {
+    if (banner) banner.hidden = true;
+    deferredPrompt = null;
+  });
+})();
+
+// ── Service Worker registration ───────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => console.log('[SW] registered, scope:', reg.scope))
+      .catch(err => console.warn('[SW] registration failed:', err));
+  });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "name": "АНЫҚ — Анализ платёжных документов",
+  "short_name": "АНЫҚ",
+  "description": "Предварительная техническая проверка платёжных чеков Kaspi.kz на признаки несоответствий",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#FFFFFF",
+  "background_color": "#FFFFFF",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "/static/logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "share_target": {
+    "action": "/share-target",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "receipt",
+          "accept": [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        }
+      ]
+    }
+  },
+  "shortcuts": [
+    {
+      "name": "Новый анализ",
+      "url": "/",
+      "description": "Загрузить новый документ для проверки"
+    }
+  ]
+}

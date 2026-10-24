@@ -1,0 +1,58 @@
+# ── Python & Virtual Environments ────────────────────────────────────────
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# ── ML models & caches ────────────────────────────────────────────────────
+.cache/
+*.pt
+*.pth
+*.onnx
+
+# ── Data & binary samples ─────────────────────────────────────────────────
+data/samples/*
+!data/samples/.gitkeep
+
+# Raster / binary files (screenshots, PDFs)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tiff
+*.zip
+*.tar
+*.tar.gz
+
+# Keep the static logo (it's part of the UI)
+!static/logo.png
+!static/icon.svg
+
+# ── IDE & OS ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+
+# ── Secrets ───────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ── Vercel artefacts ──────────────────────────────────────────────────────
+.vercel/

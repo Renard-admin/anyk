@@ -1,0 +1,29 @@
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# VCS
+.git/
+.github/
+
+# Heavy data / test assets
+data/
+tests/
+
+# Vercel artefacts
+.vercel/
+vercel.json
+requirements-vercel.txt
+
+# Logs / temp
+*.log
+*.tmp

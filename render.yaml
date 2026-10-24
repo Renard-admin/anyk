@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: anyk-analytics
+    env: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: GEMINI_API_KEY
+        sync: false   # set manually in Render dashboard

@@ -1,0 +1,48 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Python bytecode / caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# VCS
+.git/
+.gitignore
+.github/
+
+# Heavy data assets — not needed at runtime
+data/
+data/samples/
+
+# Tests — not needed at runtime
+tests/
+
+# Binary / media files (images, PDFs)
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.zip
+*.tar
+*.tar.gz
+
+# ML model caches (EasyOCR, PyTorch)
+.cache/
+*.pt
+*.pth
+*.onnx
+
+# Logs / scratch
+*.log
+*.tmp

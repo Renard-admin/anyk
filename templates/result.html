@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>АНЫҚ — Результат анализа</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#FFFFFF">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="apple-touch-icon" href="/static/icon.svg">
+
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header class="header">
+  <div class="container header-inner">
+    <a href="/" class="logo">
+      <img src="/static/logo.png" alt="" class="logo-mark" aria-hidden="true">
+      <span class="logo-name">АНЫҚ</span>
+      <span class="logo-tagline">/ SafeNet KZ</span>
+    </a>
+    <div class="header-actions">
+      <nav class="a11y-bar" aria-label="Доступность">
+        <button class="a11y-btn" id="a11yLarge" title="Увеличить текст" aria-pressed="false">Аа+</button>
+        <button class="a11y-btn" id="a11yReset" title="Обычный режим">Сброс</button>
+      </nav>
+      <a href="/" class="btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-4.5"></path>
+        </svg>
+        Новый анализ
+      </a>
+    </div>
+  </div>
+</header>
+
+<main class="main">
+  <div class="container result-container">
+
+    <!-- 1. Status banner -->
+    <div class="status-banner {{ report.risk_level }}" role="status">
+      <div>
+        <div class="status-text">{{ report.risk_level_ru }}</div>
+        <div class="status-sub">
+          {% if report.signal_count > 0 %}
+            Найдено {{ report.signal_count }} сигнал{% if report.signal_count == 1 %}{% elif report.signal_count < 5 %}а{% else %}ов{% endif %}
+          {% else %}
+            Несоответствий не обнаружено
+          {% endif %}
+        </div>
+      </div>
+      <span class="severity-badge {{ report.risk_level }}">
+        {% if report.risk_level == 'high' %}ВЫСОКИЙ
+        {% elif report.risk_level == 'medium' %}СРЕДНИЙ
+        {% elif report.risk_level == 'clear' %}ЧИСТО
+        {% else %}—{% endif %}
+      </span>
+    </div>
+
+    <!-- 2. Trust Index -->
+    <div class="trust-panel">
+      <div class="trust-score-wrap">
+        <!-- Circular gauge: --pct drives conic-gradient -->
+        <div class="trust-ring {{ report.trust_label_en }}"
+             style="--pct:{{ report.trust_score }}"
+             aria-label="Уровень доверия {{ report.trust_score }}%">
+          <div class="trust-ring-inner">
+            <span class="trust-pct">{{ report.trust_score }}%</span>
+            <span class="trust-label-text">Доверие</span>
+          </div>
+        </div>
+        <div class="trust-meta">
+          <h2 class="trust-heading">Индекс соответствия документа</h2>
+          <div class="trust-badge {{ report.trust_label_en }}">{{ report.trust_label }}</div>
+          <ul class="trust-breakdown" aria-label="Расчёт индекса доверия">
+            {% for item in report.trust_explanation %}
+            <li class="trust-item {{ 'bonus' if item.sign == '+' else 'deduct' }}">
+              <span class="trust-sign">{{ item.sign }}</span>
+              <span class="trust-delta">{{ item.delta }}</span>
+              <span class="trust-reason">{{ item.reason }}</span>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="trust-disclaimer">{{ report.trust_disclaimer }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Main grid: signals + data panel -->
+    <div class="result-grid">
+
+      <!-- Left: signals -->
+      <div>
+        <h2 class="section-title">
+          Найденные сигналы
+          <span class="section-count">({{ report.signal_count }})</span>
+        </h2>
+
+        {% if report.signals %}
+          {% for s in report.signals %}
+          <div class="signal-card {{ s.severity }}">
+            <div class="signal-header">
+              <span class="signal-title">{{ s.title_ru }}</span>
+              <span class="severity-badge {{ s.severity }}">
+                {% if s.severity == 'high' %}ВЫСОКИЙ
+                {% elif s.severity == 'medium' %}СРЕДНИЙ
+                {% else %}НИЗКИЙ{% endif %}
+              </span>
+            </div>
+            <div class="signal-body">{{ s.description_ru }}</div>
+            <div class="signal-footer">
+              <div class="signal-footer-row">
+                <span class="signal-footer-label">Доказательство:</span>
+                <code class="signal-evidence">{{ s.evidence_text }}</code>
+              </div>
+              <div class="signal-footer-row">
+                <span class="signal-footer-label">Уверенность:</span>
+                <span>{{ s.confidence }}</span>
+                <span class="sep">·</span>
+                <span class="signal-footer-label">Метод:</span>
+                <span>{{ s.method }}</span>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <div class="no-signals">
+            ✓ Очевидных несоответствий не обнаружено
+          </div>
+        {% endif %}
+
+        {% if report.signals %}
+        <details class="checks-details">
+          <summary class="checks-summary">Таблица всех проверок</summary>
+          <div class="table-scroll">
+            <table class="checks-table">
+              <thead>
+                <tr>
+                  <th>ID сигнала</th><th>Серьёзность</th><th>Уверенность</th><th>Метод</th><th>Доказательство</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for s in report.signals %}
+                <tr class="check-row-{{ s.severity }}">
+                  <td><code>{{ s.signal_id }}</code></td>
+                  <td>{{ s.severity }}</td>
+                  <td>{{ s.confidence }}</td>
+                  <td>{{ s.method }}</td>
+                  <td><code>{{ s.evidence_text[:60] }}{% if s.evidence_text|length > 60 %}…{% endif %}</code></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </details>
+        {% endif %}
+      </div>
+
+      <!-- Right: data panel -->
+      <div class="data-panel">
+
+        <div class="data-section">
+          <h3 class="data-title">Документ</h3>
+          <dl class="data-list">
+            <dt>Файл</dt>
+            <dd class="mono-clip">{{ report.image_filename or '(нет)' }}</dd>
+            <dt>Тип</dt>
+            <dd>{{ 'PDF-документ' if report.source_type == 'pdf' else 'Изображение' }}</dd>
+            <dt>Извлечение</dt>
+            <dd>{{ 'Текстовый слой PDF' if report.ocr_source == 'pdf_text_layer' else 'OCR' }}</dd>
+            <dt>OCR уверенность</dt>
+            <dd>{{ (report.ocr_confidence * 100) | round(1) }}%</dd>
+          </dl>
+        </div>
+
+        {% if report.source_type == 'pdf' and report.pdf_metadata %}
+        <div class="data-section">
+          <h3 class="data-title">Метаданные PDF</h3>
+          <dl class="data-list">
+            {% if report.pdf_metadata.author %}
+            <dt>Автор</dt><dd>{{ report.pdf_metadata.author }}</dd>
+            {% endif %}
+            {% if report.pdf_metadata.producer %}
+            <dt>Producer</dt><dd class="mono-clip">{{ report.pdf_metadata.producer }}</dd>
+            {% endif %}
+            {% if report.pdf_metadata.creation_date %}
+            <dt>Создан</dt><dd>{{ report.pdf_metadata.creation_date }}</dd>
+            {% endif %}
+            {% if report.pdf_metadata.mod_date %}
+            <dt>Изменён</dt><dd>{{ report.pdf_metadata.mod_date }}</dd>
+            {% endif %}
+            <dt>Страниц</dt>
+            <dd>{{ report.pdf_page_count }} (обработано: {{ report.pdf_pages_processed }})</dd>
+            <dt>Текстовый слой</dt>
+            <dd>{{ 'Есть' if report.pdf_has_text_layer else 'Нет (image-only)' }}</dd>
+          </dl>
+          {% if report.pdf_warnings %}
+          <div class="pdf-warnings">
+            {% for w in report.pdf_warnings %}<p>⚠ {{ w }}</p>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="data-section">
+          <h3 class="data-title">Извлечённый текст</h3>
+          <pre class="ocr-pre">{{ report.ocr_text or '(текст не извлечён)' }}</pre>
+        </div>
+
+        <div class="data-section">
+          <h3 class="data-title">Методы анализа</h3>
+          <div class="methods-list">
+            {% for m in report.analysis_methods %}
+            <span class="method-tag">{{ m }}</span>
+            {% endfor %}
+          </div>
+        </div>
+
+      </div><!-- .data-panel -->
+    </div><!-- .result-grid -->
+
+    <!-- 4. Limitations -->
+    <div class="info-block grey">
+      <h3>Что система НЕ устанавливает</h3>
+      <ul>
+        <li>Произошла ли транзакция на самом деле</li>
+        <li>Является ли документ сгенерированным AI или отредактированным</li>
+        <li>Принадлежит ли аккаунт реальному лицу</li>
+        <li>Является ли подлинным наличие метаданных Author=Kaspi.kz или совпадающих дат</li>
+      </ul>
+      <p class="disclaimer-text">{{ report.disclaimer_ru }}</p>
+    </div>
+
+    {% if report.signal_count > 0 %}
+    <div class="info-block yellow">
+      <h3>Возможные альтернативные объяснения</h3>
+      <ul>
+        <li>Опечатка или ошибка при вводе данных отправителем</li>
+        <li>Неточность OCR при распознавании рукописных или мелких символов</li>
+        <li>Нестандартный формат чека от другой платёжной системы</li>
+        <li>Временная зона, отличная от предполагаемой</li>
+      </ul>
+    </div>
+    {% endif %}
+
+    <div class="info-block green">
+      <h3>Рекомендуемые следующие шаги</h3>
+      <ul>
+        <li>Запросить подтверждение операции через официальный канал банка</li>
+        <li>Проверить другие документы из того же источника на схожие признаки</li>
+        <li>Зафиксировать обнаруженные признаки в системе кейс-менеджмента</li>
+        {% if report.signal_count > 0 %}
+        <li>Уточнить у автора документа детали, вызвавшие сигналы</li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="action-row">
+      <a href="/report/{{ report.report_id }}/export" class="btn-secondary" download>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        Экспорт TXT
+      </a>
+      <a href="/" class="btn-secondary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="1 4 1 10 7 10"></polyline>
+          <path d="M3.51 15a9 9 0 1 0 .49-4.5"></path>
+        </svg>
+        Новый анализ
+      </a>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// Accessibility toolbar
+(function() {
+  const LARGE_KEY = 'anyk_large_text';
+  function applyLarge(on) {
+    document.documentElement.classList.toggle('a11y-large', on);
+    try { localStorage.setItem(LARGE_KEY, on ? '1' : '0'); } catch {}
+    const btn = document.getElementById('a11yLarge');
+    if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  try { if (localStorage.getItem(LARGE_KEY) === '1') applyLarge(true); } catch {}
+  const btnL = document.getElementById('a11yLarge');
+  const btnR = document.getElementById('a11yReset');
+  if (btnL) btnL.addEventListener('click', () => applyLarge(true));
+  if (btnR) btnR.addEventListener('click', () => applyLarge(false));
+})();
+
+// Service Worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+}
+</script>
+</body>
+</html>
