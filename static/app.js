@@ -295,7 +295,25 @@ analyzeForm.addEventListener('submit', async (e) => {
 
   try {
     const res = await fetch('/analyze', { method: 'POST', body: formData });
-    const data = await res.json();
+
+    // Guard against empty body (OOM kill / 502 gateway)
+    const text = await res.text();
+    if (!text || !text.trim()) {
+      throw new Error(
+        'Сервер временно перегружен или обрабатывает документ слишком долго. ' +
+        'Попробуйте загрузить файл в формате PDF или повторите через несколько секунд.'
+      );
+    }
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(
+        'Сервер вернул неожиданный ответ. ' +
+        'Попробуйте загрузить файл в формате PDF или повторите через несколько секунд.'
+      );
+    }
 
     if (!res.ok || data.error) {
       throw new Error(data.message || `Ошибка сервера: ${res.status}`);

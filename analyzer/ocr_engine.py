@@ -24,6 +24,11 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# ── PyTorch thread limits (must happen before torch is imported) ──────────
+# Keeps RAM usage within Render's 512 MB free-tier limit.
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+os.environ.setdefault("MKL_NUM_THREADS", "1")
+
 # ── Availability flags ────────────────────────────────────────────────────
 
 def _easyocr_available() -> bool:
@@ -36,17 +41,26 @@ def _easyocr_available() -> bool:
 
 
 _EASYOCR_OK: bool = _easyocr_available()
+
+if _EASYOCR_OK:
+    try:
+        import torch
+        torch.set_num_threads(1)
+    except Exception:
+        pass
+
 _reader = None
 
 
-# ── Tier 1: EasyOCR ───────────────────────────────────────────────────────
+# ── Tier 1: EasyOCR (lazy — loaded only on first OCR call) ────────────────
 
 def _get_reader():
     global _reader
     if _reader is None:
         import easyocr
         logger.info("Initializing EasyOCR reader (first call)…")
-        _reader = easyocr.Reader(['ru', 'en'], gpu=False, verbose=False)
+        _reader = easyocr.Reader(['ru', 'en'], gpu=False, verbose=False,
+                                  quantize=True)
         logger.info("EasyOCR reader ready.")
     return _reader
 
