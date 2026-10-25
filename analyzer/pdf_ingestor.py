@@ -89,7 +89,7 @@ def validate_pdf(path: str) -> None:
         )
 
 
-def ingest_pdf(path: str) -> dict:
+def ingest_pdf(path: str, render_pages: bool = False) -> dict:
     """
     Open a PDF, extract metadata, render pages to PNG temp files.
 
@@ -180,19 +180,19 @@ def ingest_pdf(path: str) -> dict:
         if len(page_text) > 30:
             has_text_layer = True
 
-        # Render page to image (always — needed for OCR fallback and layout check)
-        pix = page.get_pixmap(matrix=mat, colorspace=pymupdf.csRGB, alpha=False)
-        tmp_path = os.path.join(
-            tempfile.gettempdir(),
-            f"anyk_pdf_{uuid.uuid4().hex}_p{page_num + 1}.png",
-        )
-        pix.save(tmp_path)
-        page_image_paths.append(tmp_path)
-        logger.info(
-            "PDF page %d rendered → %s (%dx%d) engine=%s",
-            page_num + 1, tmp_path, pix.width, pix.height,
-            pdf_metadata["pdf_engine"],
-        )
+        if render_pages:
+            pix = page.get_pixmap(matrix=mat, colorspace=pymupdf.csRGB, alpha=False)
+            tmp_path = os.path.join(
+                tempfile.gettempdir(),
+                f"anyk_pdf_{uuid.uuid4().hex}_p{page_num + 1}.png",
+            )
+            pix.save(tmp_path)
+            page_image_paths.append(tmp_path)
+            logger.info(
+                "PDF page %d rendered → %s (%dx%d) engine=%s",
+                page_num + 1, tmp_path, pix.width, pix.height,
+                pdf_metadata["pdf_engine"],
+            )
 
     doc.close()
 
