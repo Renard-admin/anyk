@@ -81,6 +81,11 @@ _EXIF_EDIT_KW = (
     "canva", "figma", "affinity", "pixelmator",
 )
 
+_SEV_DELTA = {"high": 25, "medium": 12, "low": 4}
+
+# Image files get a base trust penalty — screenshots can be easily edited
+_IMAGE_PENALTY = 20
+
 
 # ─────────────────────────── Signal factory ──────────────────────────────────
 
@@ -401,27 +406,23 @@ def _check_exif(image_path: str) -> tuple[list[dict], int]:
 
 # ─────────────────────── Trust score ─────────────────────────────────────────
 
-def _compute_trust(bonus: int, signals: list[dict]) -> tuple[int, str, str, str]:
+def _compute_trust(bonus: int, signals: list[dict]) -> tuple[int, str, str]:
     deduction = sum(
-        {"high": 25, "medium": 12, "low": 4}.get(s.get("severity", "low"), 0)
+        _SEV_DELTA.get(s.get("severity", "low"), 0)
         for s in signals
     )
     trust_score = max(0, min(100, bonus - deduction))
 
     if trust_score >= 80:
         label, label_en = "Подлинный", "authentic"
-        explanation = "Документ соответствует всем структурным и метаданным признакам подлинного чека Kaspi."
     elif trust_score >= 50:
         label, label_en = "Требует проверки", "review_needed"
-        explanation = "Обнаружены отдельные несоответствия. Рекомендуется дополнительная проверка."
     elif trust_score >= 25:
         label, label_en = "Подозрительный", "suspicious"
-        explanation = "Несколько признаков указывают на возможные манипуляции с документом."
     else:
         label, label_en = "Вероятная подделка", "likely_fake"
-        explanation = "Документ не соответствует структуре подлинных чеков Kaspi."
 
-    return trust_score, label, label_en, explanation
+    return trust_score, label, label_en
 
 
 # ─────────────────────────── Public API ──────────────────────────────────────
@@ -450,6 +451,14 @@ def match_template(
     signals: list[dict] = []
     bonus = 0
     checks_run: list[str] = []
+    breakdown: list[dict] = []
+    image_penalty = 0
+
+    def _add_sigs_to_breakdown(sigs: list[dict]) -> None:
+        for s in sigs:
+            d = _SEV_DELTA.get(s.get("severity", "low"), 0)
+            if d:
+                breakdown.append({"sign": "-", "delta": f"-{d}%", "reason": s["title_ru"]})
 
     if detected_type == "pdf" and pdf_info:
         try:
@@ -464,6 +473,9 @@ def match_template(
         # Check 1 — metadata
         sigs, b = _check_metadata(meta)
         signals.extend(sigs); bonus += b; checks_run.append("metadata")
+        if b > 0:
+            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "Метаданные PDF: производитель подлинный (iOS / Kaspi)"})
+        _add_sigs_to_breakdown(sigs)
 
         # Check 2 — text layer
         sigs, b = _check_text_layer(
@@ -471,6 +483,9 @@ def match_template(
             pdf_info.get("text_layers", []),
         )
         signals.extend(sigs); bonus += b; checks_run.append("text_layer")
+        if b > 0:
+            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "Текстового слоя нет — image-only PDF (характерно для Kaspi)"})
+        _add_sigs_to_breakdown(sigs)
 
         if doc is not None:
             try:
@@ -481,23 +496,43 @@ def match_template(
                 # Check 3 — geometry
                 sigs, b = _check_geometry(pw, ph, blocks)
                 signals.extend(sigs); bonus += b; checks_run.append("geometry")
+                if b > 0:
+                    breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "Геометрия страницы соответствует шаблону Kaspi"})
+                _add_sigs_to_breakdown(sigs)
 
                 # Check 4 — fingerprints
                 sigs, b = _check_fingerprints(doc)
                 signals.extend(sigs); bonus += b; checks_run.append("fingerprints")
+                if b > 0:
+                    breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "Хэши изображений совпадают с эталоном Kaspi"})
+                _add_sigs_to_breakdown(sigs)
             finally:
                 doc.close()
 
     elif detected_type == "image":
+        # Screenshot/image files receive a base trust penalty
+        image_penalty = _IMAGE_PENALTY
+        breakdown.append({
+            "sign": "-",
+            "delta": f"-{image_penalty}%",
+            "reason": "Тип файла: Скриншот/Изображение (коэффициент снижения доверия -20%)",
+        })
+
         # Check 5 — ELA
         sigs, b = _check_ela(file_path)
         signals.extend(sigs); bonus += b; checks_run.append("ela")
+        if b > 0:
+            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "ELA: уровни сжатия изображения в норме"})
+        _add_sigs_to_breakdown(sigs)
 
         # Check 6 — EXIF
         sigs, b = _check_exif(file_path)
         signals.extend(sigs); bonus += b; checks_run.append("exif")
+        if b > 0:
+            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "EXIF: следов редактирования не обнаружено"})
+        _add_sigs_to_breakdown(sigs)
 
-    trust_score, trust_label, trust_label_en, explanation = _compute_trust(bonus, signals)
+    trust_score, trust_label, trust_label_en = _compute_trust(bonus - image_penalty, signals)
 
     elapsed_ms = (time.time() - t0) * 1000
     logger.info(
@@ -516,7 +551,7 @@ def match_template(
         "trust_score": trust_score,
         "trust_label": trust_label,
         "trust_label_en": trust_label_en,
-        "trust_explanation": explanation,
+        "trust_explanation": breakdown,
         "trust_disclaimer": _DISCLAIMER,
         "checks_run": checks_run,
         "elapsed_ms": round(elapsed_ms, 1),

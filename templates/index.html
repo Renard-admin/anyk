@@ -51,9 +51,16 @@
   <div class="modal-box">
     <h2 class="modal-title" id="termsTitle">Уведомление об ограничениях</h2>
     <div class="modal-body">
-      <p>Инструмент «АНЫҚ» предназначен исключительно для автоматизации предварительного технического анализа платёжных документов. Система выполняет вспомогательную функцию и не является экспертным юридическим или финансовым заключением. Сервис и его разработчики не несут ответственности за любые решения, принятые пользователем на основе результатов анализа.</p>
+      <p>Инструмент «АНЫҚ» предназначен исключительно для автоматизации предварительного технического анализа платёжных документов. Система выполняет вспомогательную функцию и <strong>не является</strong> экспертным юридическим или финансовым заключением.</p>
+      <p>Сервис и его разработчики не несут ответственности за любые решения, принятые пользователем на основе результатов анализа. Загружаемые файлы не сохраняются и не передаются третьим лицам.</p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface-2)">
+        <input type="checkbox" id="termsCheckbox"
+               style="margin-top:2px;flex-shrink:0;width:18px;height:18px;cursor:pointer;accent-color:var(--c-text-1)"
+               aria-label="Я ознакомился(ась) с ограничениями">
+        <span style="font-size:var(--text-sm);color:var(--c-text-1);line-height:1.5">Я ознакомился(ась) с ограничениями системы и принимаю их</span>
+      </label>
     </div>
-    <button class="btn-primary modal-accept" id="termsAccept">Я согласен(на) и продолжить</button>
+    <button class="btn-primary modal-accept" id="termsAccept" disabled>Продолжить →</button>
   </div>
 </div>
 
@@ -165,7 +172,7 @@
         <div class="progress-step" id="step1" role="listitem">
           <span class="step-num" aria-hidden="true">1</span>
           <span class="step-dot" aria-hidden="true"></span>
-          <span>Считывание структуры и OCR</span>
+          <span>Считывание структуры документа</span>
         </div>
         <div class="progress-step" id="step2" role="listitem">
           <span class="step-num" aria-hidden="true">2</span>
@@ -183,7 +190,7 @@
           <span>Формирование отчёта</span>
         </div>
       </div>
-      <p class="progress-hint">Обычно занимает 10–25 секунд</p>
+      <p class="progress-hint">Обычно занимает менее 1 секунды</p>
     </div>
 
   </div>
@@ -193,17 +200,31 @@
 <script>
 // ── Terms modal ───────────────────────────────────────────────────────────────
 (function() {
-  const TERMS_KEY = 'anyk_disclaimer_accepted';
-  const modal     = document.getElementById('termsModal');
-  const acceptBtn = document.getElementById('termsAccept');
-  let   accepted  = false;
+  const TERMS_KEY  = 'anyk_disclaimer_accepted';
+  const modal      = document.getElementById('termsModal');
+  const acceptBtn  = document.getElementById('termsAccept');
+  const checkbox   = document.getElementById('termsCheckbox');
+  let   accepted   = false;
   try { accepted = localStorage.getItem(TERMS_KEY) === 'true'; } catch {}
 
-  function openModal()  { modal.hidden = false; acceptBtn.focus(); document.body.style.overflow = 'hidden'; }
-  function closeModal() { modal.hidden = true;  document.body.style.overflow = ''; }
+  function openModal() {
+    modal.hidden = false;
+    if (checkbox) checkbox.checked = false;
+    if (acceptBtn) acceptBtn.disabled = true;
+    document.body.style.overflow = 'hidden';
+    setTimeout(() => { if (checkbox) checkbox.focus(); }, 50);
+  }
+  function closeModal() { modal.hidden = true; document.body.style.overflow = ''; }
+
+  if (checkbox) {
+    checkbox.addEventListener('change', () => {
+      if (acceptBtn) acceptBtn.disabled = !checkbox.checked;
+    });
+  }
 
   if (acceptBtn) {
     acceptBtn.addEventListener('click', () => {
+      if (checkbox && !checkbox.checked) return;
       try { localStorage.setItem(TERMS_KEY, 'true'); } catch {}
       accepted = true;
       closeModal();
