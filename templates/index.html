@@ -38,6 +38,12 @@
       <span class="logo-tagline">/ SafeNet KZ</span>
     </a>
     <div class="header-actions">
+      <!-- Install button: visible only when beforeinstallprompt fires -->
+      <button class="btn-secondary" id="headerInstallBtn" hidden
+              style="font-size:var(--text-sm);padding:6px 12px"
+              aria-label="Установить приложение АНЫҚ">
+        📲 Установить
+      </button>
       <nav class="a11y-bar" aria-label="Доступность">
         <button class="a11y-btn" id="a11yLarge" title="Увеличить текст" aria-pressed="false">Аа+</button>
         <button class="a11y-btn" id="a11yReset" title="Обычный режим">Сброс</button>
@@ -286,31 +292,49 @@
   const installBtn = document.getElementById('installBtn');
   const dismissBtn = document.getElementById('installDismiss');
 
+  // Hide banner if already running in standalone (installed) mode
+  if (window.matchMedia('(display-mode: standalone)').matches ||
+      window.navigator.standalone === true) {
+    if (banner) banner.hidden = true;
+  }
+
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     deferredPrompt = e;
     try { if (localStorage.getItem('anyk_pwa_dismissed') === '1') return; } catch {}
+    if (window.matchMedia('(display-mode: standalone)').matches) return;
     if (banner) banner.hidden = false;
+    // Also show the header install button
+    const hBtn = document.getElementById('headerInstallBtn');
+    if (hBtn) hBtn.hidden = false;
   });
 
-  if (installBtn) {
-    installBtn.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      if (banner) banner.hidden = true;
-    });
+  async function triggerInstall() {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if (banner) banner.hidden = true;
+    const hBtn = document.getElementById('headerInstallBtn');
+    if (hBtn) hBtn.hidden = true;
   }
+
+  if (installBtn) installBtn.addEventListener('click', triggerInstall);
+  const hInstallBtn = document.getElementById('headerInstallBtn');
+  if (hInstallBtn) hInstallBtn.addEventListener('click', triggerInstall);
   if (dismissBtn) {
     dismissBtn.addEventListener('click', () => {
       if (banner) banner.hidden = true;
+      const hBtn = document.getElementById('headerInstallBtn');
+      if (hBtn) hBtn.hidden = true;
       try { localStorage.setItem('anyk_pwa_dismissed', '1'); } catch {}
     });
   }
 
   window.addEventListener('appinstalled', () => {
     if (banner) banner.hidden = true;
+    const hBtn = document.getElementById('headerInstallBtn');
+    if (hBtn) hBtn.hidden = true;
     deferredPrompt = null;
   });
 })();
