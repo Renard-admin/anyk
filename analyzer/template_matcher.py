@@ -431,6 +431,103 @@ def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
         return False, ""
 
 
+# ──────────── Image Check 8: Watermark / fake-overlay detection ──────────────
+
+def _check_watermark_pattern(image_path: str) -> list[dict]:
+    """
+    Detect uniform diagonal watermark overlays produced by fake-receipt bots
+    (e.g. @fake_perevod_bot whose text reads «ФЕЙКОВЫЙ ЧЕК»).
+
+    Algorithm (pure Pillow, no OCR):
+      1. Convert to grayscale, scale to ~240px wide.
+      2. Divide image into a 4×6 grid (24 cells).
+      3. For each cell count "mid-gray" pixels (value 70–215) — the range
+         where gray watermark text lives; genuine white background is >220
+         and genuine black text is <70.
+      4. Watermark signature = ≥75% of cells have mid-gray density > 4%
+         AND the coefficient of variation across cells is < 0.7 (uniformly
+         spread, not clustered in a few text rows).
+      Real receipts: text rows have high density, blank rows near-zero →
+      high CV, fewer than 75% of cells trigger at the 4% threshold.
+      Faked receipts: diagonal overlay covers every cell (including margins)
+      → all cells show ~4%+ mid-gray, low CV.
+    """
+    try:
+        from PIL import Image
+
+        img = Image.open(image_path).convert("L")  # grayscale
+        w, h = img.size
+        if w == 0 or h == 0:
+            return []
+
+        scale = min(1.0, 240.0 / w)
+        nw = max(4, int(w * scale))
+        nh = max(6, int(h * scale))
+        small = img.resize((nw, nh), Image.LANCZOS)
+        px = list(small.getdata())  # flat list of gray values
+
+        COLS, ROWS = 4, 6
+        cw = nw // COLS
+        ch = nh // ROWS
+
+        densities: list[float] = []
+        for row in range(ROWS):
+            for col in range(COLS):
+                cell: list[int] = []
+                for y in range(row * ch, min((row + 1) * ch, nh)):
+                    base = y * nw + col * cw
+                    end  = min(base + cw, y * nw + nw)
+                    cell.extend(px[base:end])
+                if not cell:
+                    continue
+                mid_gray = sum(1 for v in cell if 70 <= v <= 215)
+                densities.append(mid_gray / len(cell))
+
+        if len(densities) < 8:
+            return []
+
+        n = len(densities)
+        mean = sum(densities) / n
+        variance = sum((d - mean) ** 2 for d in densities) / n
+        std = variance ** 0.5
+        cv = std / mean if mean > 0 else 999
+
+        # 4% threshold: even the cleanest margin cells of @fake_perevod_bot
+        # watermarks show ~4% mid-gray; genuine white margins are <2%.
+        high_cells = sum(1 for d in densities if d > 0.04)
+        fraction_high = high_cells / n
+
+        is_watermark = (
+            fraction_high >= 0.75 and   # ≥75% of cells above 4% threshold
+            mean >= 0.04 and            # image-wide mid-gray is at least 4%
+            cv < 0.70                   # uniform spread (not just text rows)
+        )
+
+        logger.debug(
+            "Watermark grid: cells=%d high=%.0f%% mean=%.3f std=%.3f cv=%.3f → %s",
+            n, fraction_high * 100, mean, std, cv,
+            "WATERMARK" if is_watermark else "clean",
+        )
+
+        if is_watermark:
+            return [_sig(
+                "WATERMARK_OVERLAY_DETECTED", "high",
+                "⛔ Обнаружены водяные знаки генератора фейков",
+                (
+                    f"Изображение содержит равномерно распределённый текстовый оверлей "
+                    f"({high_cells}/{n} зон, среднее покрытие {mean*100:.0f}%, "
+                    f"коэффициент вариации {cv:.2f}). "
+                    "Признак чеков из генераторов типа «ФЕЙКОВЫЙ ЧЕК @fake_perevod_bot»."
+                ),
+                f"high_cells={high_cells}/{n} mean={mean:.3f} cv={cv:.3f}",
+                "high", "watermark_check",
+            )]
+    except Exception as e:
+        logger.debug("Watermark check skipped: %s", e)
+
+    return []
+
+
 # ─────────────────── Image Check 5: ELA ──────────────────────────────────────
 
 def _check_ela(image_path: str) -> tuple[list[dict], int]:
@@ -682,52 +779,74 @@ def match_template(
                 doc.close()
 
     elif detected_type == "image":
-        # Check 7 — Kaspi color signature (runs first, affects all downstream scoring)
-        is_kaspi_screenshot, kaspi_confidence = _check_kaspi_screenshot_colors(file_path)
-        checks_run.append("kaspi_color_analysis")
+        # Check 8 — Watermark overlay detection (MUST run first — overrides everything)
+        watermark_sigs = _check_watermark_pattern(file_path)
+        checks_run.append("watermark_check")
 
-        if is_kaspi_screenshot:
+        if watermark_sigs:
+            # Immediate hard override: fake-receipt watermark detected
+            signals.extend(watermark_sigs)
             breakdown.append({
-                "sign": "+",
-                "delta": "+87%",
-                "reason": f"Распознан как скриншот чека Kaspi (цветовой анализ, {kaspi_confidence})",
+                "sign": "⛔",
+                "delta": "−100%",
+                "reason": "Обнаружены водяные знаки генератора фейков (ФЕЙКОВЫЙ ЧЕК)",
             })
-            image_penalty = 0  # scoring done directly from 87% base in _compute_trust_image
+            _add_sigs_to_breakdown(watermark_sigs)
+            # Force terminal result — skip all other checks
+            trust_score    = 3
+            trust_label    = "⛔ Подделка (водяной знак)"
+            trust_label_en = "likely_fake"
+            is_kaspi_receipt = False
         else:
-            # Unrecognized screenshot — apply base trust penalty
-            image_penalty = _IMAGE_PENALTY
-            breakdown.append({
-                "sign": "-",
-                "delta": f"-{image_penalty}%",
-                "reason": "Тип файла: Скриншот/Изображение (коэффициент снижения доверия -20%)",
-            })
+            # Check 7 — Kaspi color signature (only when no watermark)
+            is_kaspi_screenshot, kaspi_confidence = _check_kaspi_screenshot_colors(file_path)
+            checks_run.append("kaspi_color_analysis")
 
-        # Check 5 — ELA
-        sigs, b = _check_ela(file_path)
-        signals.extend(sigs); bonus += b; checks_run.append("ela")
-        if b > 0:
-            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "ELA: уровни сжатия изображения в норме"})
-        _add_sigs_to_breakdown(sigs)
+            if is_kaspi_screenshot:
+                breakdown.append({
+                    "sign": "+",
+                    "delta": "+87%",
+                    "reason": f"Распознан как скриншот чека Kaspi (цветовой анализ, {kaspi_confidence})",
+                })
+                image_penalty = 0
+            else:
+                image_penalty = _IMAGE_PENALTY
+                breakdown.append({
+                    "sign": "-",
+                    "delta": f"-{image_penalty}%",
+                    "reason": "Тип файла: Скриншот/Изображение (коэффициент снижения доверия -20%)",
+                })
 
-        # Check 6 — EXIF
-        sigs, b = _check_exif(file_path)
-        signals.extend(sigs); bonus += b; checks_run.append("exif")
-        if b > 0:
-            breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "EXIF: следов редактирования не обнаружено"})
-        _add_sigs_to_breakdown(sigs)
+            # Check 5 — ELA
+            sigs, b = _check_ela(file_path)
+            signals.extend(sigs); bonus += b; checks_run.append("ela")
+            if b > 0:
+                breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "ELA: уровни сжатия изображения в норме"})
+            _add_sigs_to_breakdown(sigs)
+
+            # Check 6 — EXIF
+            sigs, b = _check_exif(file_path)
+            signals.extend(sigs); bonus += b; checks_run.append("exif")
+            if b > 0:
+                breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "EXIF: следов редактирования не обнаружено"})
+            _add_sigs_to_breakdown(sigs)
 
     # --- Trust computation ---
     is_kaspi_receipt = detected_type == "pdf"
 
     if detected_type == "image":
-        trust_score, trust_label, trust_label_en = _compute_trust_image(signals, is_kaspi_screenshot)
-        is_kaspi_receipt = is_kaspi_screenshot  # True when Kaspi colors confirmed
-        if trust_label_en == "not_applicable":
-            breakdown.append({
-                "sign": "—",
-                "delta": "Н/Д",
-                "reason": "Цвета Kaspi не обнаружены — загрузите PDF для точного анализа",
-            })
+        if any(s["signal_id"] == "WATERMARK_OVERLAY_DETECTED" for s in signals):
+            # Hard override already applied above — trust_score/label already set
+            pass
+        else:
+            trust_score, trust_label, trust_label_en = _compute_trust_image(signals, is_kaspi_screenshot)
+            is_kaspi_receipt = is_kaspi_screenshot
+            if trust_label_en == "not_applicable":
+                breakdown.append({
+                    "sign": "—",
+                    "delta": "Н/Д",
+                    "reason": "Цвета Kaspi не обнаружены — загрузите PDF для точного анализа",
+                })
     else:
         trust_score, trust_label, trust_label_en = _compute_trust(bonus - image_penalty, signals)
 
