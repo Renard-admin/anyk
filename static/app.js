@@ -288,12 +288,12 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   startProgress();
 
   const formData = new FormData();
-  // Force a filename so mobile browsers (iOS/Android) don't send an empty or
-  // 'blob' name, which causes the backend to fail extension detection.
-  const safeName = (selectedFile.name && selectedFile.name !== 'blob')
+  // Force a filename with extension so iOS Safari / Android never sends an
+  // empty name, 'blob', or a name without a dot (which breaks backend sniffing).
+  const safeFilename = (selectedFile.name && selectedFile.name.includes('.'))
     ? selectedFile.name
-    : (selectedFile.type === 'application/pdf' ? 'mobile_receipt.pdf' : 'mobile_receipt.jpg');
-  formData.append('file', selectedFile, safeName);
+    : (selectedFile.type === 'application/pdf' ? 'iphone_receipt.pdf' : 'iphone_receipt.jpg');
+  formData.append('file', selectedFile, safeFilename);
   const context = document.getElementById('contextInput')?.value || '';
   formData.append('context', context);
 

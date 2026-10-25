@@ -57,6 +57,12 @@ def _sniff_mime(data: bytes) -> str | None:
         return "image"
     if data[:4] in (b"II*\x00", b"MM\x00*"):
         return "image"
+    # HEIC/HEIF: ISO Base Media File Format — ftyp box at offset 4
+    # box size (4 bytes) + "ftyp" + brand (heic/heis/heim/heix/hevc/mif1/…)
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        brand = data[8:12]
+        if brand[:3] in (b"hei", b"hev", b"mif", b"iso"):
+            return "image"
     return None
 
 
@@ -116,7 +122,7 @@ async def _handle_share_upload(request: Request, uploaded_file) -> "Response":
         detected_type = _sniff_mime(content[:16])
         raw_name = (uploaded_file.filename or "").strip()
         if not raw_name or raw_name.lower() in ("blob", "image", "file"):
-            raw_name = "shared_receipt"
+            raw_name = "iphone_upload.jpg"
         filename = raw_name
         ext = os.path.splitext(filename)[1].lower() or ""
 
@@ -128,11 +134,20 @@ async def _handle_share_upload(request: Request, uploaded_file) -> "Response":
             elif uploaded_file.content_type and "pdf" in uploaded_file.content_type:
                 detected_type = "pdf"
                 ext = ".pdf"
-            elif uploaded_file.content_type and uploaded_file.content_type.startswith("image/"):
+            elif uploaded_file.content_type and (
+                uploaded_file.content_type.startswith("image/") or
+                uploaded_file.content_type == "application/octet-stream"
+            ):
                 detected_type = "image"
                 ext = ".jpg"
             else:
-                return _RR(url="/?share_error=format", status_code=303)
+                # Last resort: treat as image rather than failing the share flow
+                logger.warning(
+                    "Unknown type for shared %s (ct=%s), falling back to image",
+                    filename, uploaded_file.content_type,
+                )
+                detected_type = "image"
+                ext = ".jpg"
 
         safe_ext = ext if ext else (".pdf" if detected_type == "pdf" else ".png")
         tmp_path = os.path.join(tempfile.gettempdir(), f"anyk_share_{uuid.uuid4().hex}{safe_ext}")
@@ -213,29 +228,36 @@ async def analyze(
 
         detected_type = _sniff_mime(content[:16])
         raw_name = (file.filename or "").strip()
-        # Mobile browsers sometimes send empty name or 'blob' with no extension
+        # iOS/Android often send empty name, 'blob', 'image', or no extension
         if not raw_name or raw_name.lower() in ("blob", "image", "file"):
-            raw_name = "upload"
+            raw_name = "iphone_upload.jpg"
         filename = raw_name
         ext = os.path.splitext(filename)[1].lower() or ""
 
         if detected_type is None:
+            # Try extension first
             if ext in _ALLOWED_IMAGE_EXTS:
                 detected_type = "image"
             elif ext in _ALLOWED_PDF_EXTS:
                 detected_type = "pdf"
+            # Then content_type header
             elif file.content_type and "pdf" in file.content_type:
                 detected_type = "pdf"
                 ext = ".pdf"
-            elif file.content_type and file.content_type.startswith("image/"):
+            elif file.content_type and (
+                file.content_type.startswith("image/") or
+                file.content_type == "application/octet-stream"
+            ):
                 detected_type = "image"
                 ext = ".jpg"
             else:
-                return JSONResponse(
-                    {"error": "unsupported_format",
-                     "message": "Формат не поддерживается. Загрузите PNG, JPG, WEBP или PDF."},
-                    status_code=422,
+                # Last resort: treat as image — never 422 a non-empty upload
+                logger.warning(
+                    "Unknown type for %s (ct=%s), falling back to image",
+                    filename, file.content_type,
                 )
+                detected_type = "image"
+                ext = ".jpg"
 
         safe_ext = ext if ext else (".pdf" if detected_type == "pdf" else ".png")
         tmp_path = os.path.join(tempfile.gettempdir(), f"anyk_raw_{uuid.uuid4().hex}{safe_ext}")
