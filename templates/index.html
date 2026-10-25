@@ -39,7 +39,7 @@
     </a>
     <div class="header-actions">
       <!-- Install button: always shown on mobile, hidden in standalone mode -->
-      <button class="btn-secondary" id="headerInstallBtn"
+      <button class="btn-secondary" id="headerInstallBtn" hidden
               style="font-size:var(--text-sm);padding:6px 12px"
               aria-label="Установить приложение АНЫҚ">
         📲 Установить
@@ -328,7 +328,7 @@
   if (isIOS) {
     try { if (localStorage.getItem('anyk_pwa_dismissed') === '1') { hideAll(); return; } } catch {}
     if (banner) banner.hidden = false;
-    // headerInstallBtn is already visible (not hidden in HTML)
+    if (hInstallBtn) hInstallBtn.hidden = false;
   }
 
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -353,9 +353,6 @@
       const { outcome } = await deferredPrompt.userChoice;
       deferredPrompt = null;
       if (outcome === 'accepted') hideAll();
-    } else {
-      // Desktop browser — native prompt not available, guide the user
-      alert('Для установки откройте меню браузера (⋮ или ⋯) и выберите «Установить приложение» или «Добавить на рабочий стол».');
     }
   }
 
