@@ -87,29 +87,16 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.post("/share-target")
-async def share_target(
-    request: Request,
-    receipt: UploadFile = File(default=None),
-):
-    uploaded_file = receipt
-    if uploaded_file is None:
-        form = await request.form()
-        for _, val in form.items():
-            if hasattr(val, "filename") and val.filename:
-                uploaded_file = val
-                break
-
-    if uploaded_file is None:
-        return RedirectResponse(url="/?share_error=no_file", status_code=303)
-
+async def _handle_share_upload(request: Request, uploaded_file) -> "Response":
+    """Shared logic for /share-target and /analyze-share."""
+    from fastapi.responses import RedirectResponse as _RR
     tmp_path = None
     try:
         content = await uploaded_file.read()
         if len(content) > _MAX_FILE_BYTES:
-            return RedirectResponse(url="/?share_error=too_large", status_code=303)
+            return _RR(url="/?share_error=too_large", status_code=303)
         if len(content) < 4:
-            return RedirectResponse(url="/?share_error=empty", status_code=303)
+            return _RR(url="/?share_error=empty", status_code=303)
 
         detected_type = _sniff_mime(content[:16])
         filename = uploaded_file.filename or "shared_receipt"
@@ -121,7 +108,7 @@ async def share_target(
             elif ext in _ALLOWED_PDF_EXTS:
                 detected_type = "pdf"
             else:
-                return RedirectResponse(url="/?share_error=format", status_code=303)
+                return _RR(url="/?share_error=format", status_code=303)
 
         safe_ext = ext if ext else (".pdf" if detected_type == "pdf" else ".png")
         tmp_path = os.path.join(tempfile.gettempdir(), f"anyk_share_{uuid.uuid4().hex}{safe_ext}")
@@ -130,17 +117,53 @@ async def share_target(
 
         report = _run_analysis(tmp_path, detected_type, filename)
         _reports[report["report_id"]] = report
-        return RedirectResponse(url=f"/report/{report['report_id']}", status_code=303)
+        return _RR(url=f"/report/{report['report_id']}", status_code=303)
 
-    except Exception as e:
-        logger.exception("Share-target analysis failed")
-        return RedirectResponse(url=f"/?share_error={type(e).__name__}", status_code=303)
+    except Exception:
+        logger.exception("Share upload analysis failed")
+        return _RR(url="/?share_error=server_error", status_code=303)
     finally:
         if tmp_path and os.path.exists(tmp_path):
             try:
                 os.unlink(tmp_path)
             except OSError:
                 pass
+
+
+@app.post("/analyze-share")
+async def analyze_share(
+    request: Request,
+    file: UploadFile = File(default=None),
+):
+    """Web Share Target endpoint — receives files shared from Telegram/WhatsApp/Gallery."""
+    uploaded_file = file
+    if uploaded_file is None:
+        form = await request.form()
+        for _, val in form.items():
+            if hasattr(val, "filename") and val.filename:
+                uploaded_file = val
+                break
+    if uploaded_file is None:
+        return RedirectResponse(url="/?share_error=no_file", status_code=303)
+    return await _handle_share_upload(request, uploaded_file)
+
+
+@app.post("/share-target")
+async def share_target(
+    request: Request,
+    receipt: UploadFile = File(default=None),
+):
+    """Legacy share target endpoint kept for backwards compatibility."""
+    uploaded_file = receipt
+    if uploaded_file is None:
+        form = await request.form()
+        for _, val in form.items():
+            if hasattr(val, "filename") and val.filename:
+                uploaded_file = val
+                break
+    if uploaded_file is None:
+        return RedirectResponse(url="/?share_error=no_file", status_code=303)
+    return await _handle_share_upload(request, uploaded_file)
 
 
 @app.post("/analyze")

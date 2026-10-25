@@ -46,7 +46,7 @@ def test_manifest_has_share_target():
     data = resp.json()
     assert "share_target" in data, "manifest.json must include share_target for PWA sharing"
     st = data["share_target"]
-    assert st.get("action") == "/share-target"
+    assert st.get("action") in ("/share-target", "/analyze-share")
     assert st.get("method", "").upper() == "POST"
 
 

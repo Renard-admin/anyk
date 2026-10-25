@@ -143,8 +143,43 @@
           <span class="section-count">({{ report.signal_count }})</span>
         </h2>
 
-        {% if report.signals %}
-          {% for s in report.signals %}
+        <!-- Dynamic summary card: green when clean, red/yellow when issues found -->
+        {% if report.signal_count == 0 %}
+        <div class="no-signals" style="display:flex;align-items:center;gap:14px;text-align:left">
+          <span style="font-size:1.6rem;line-height:1;flex-shrink:0">✓</span>
+          <div>
+            <div>Очевидных несоответствий не обнаружено</div>
+            <div style="font-size:var(--text-sm);font-weight:400;opacity:.75;margin-top:3px">Геометрия, метаданные и структура соответствуют стандарту Kaspi</div>
+          </div>
+        </div>
+        {% else %}
+        {% if report.risk_level == 'high' %}
+          {% set s_bg    = 'var(--c-risk-bg, #fff0f0)' %}
+          {% set s_bdr   = 'var(--c-risk, #dc2626)'    %}
+          {% set s_clr   = 'var(--c-risk-text, #b91c1c)' %}
+        {% else %}
+          {% set s_bg    = 'var(--c-warn-bg)'    %}
+          {% set s_bdr   = 'var(--c-warn)'       %}
+          {% set s_clr   = 'var(--c-warn-text)'  %}
+        {% endif %}
+        <div style="background:{{ s_bg }};border:1px solid {{ s_bdr }};border-left:4px solid {{ s_bdr }};border-radius:var(--r-xl);padding:var(--sp-5) var(--sp-6);margin-bottom:var(--sp-4)">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:var(--sp-3)">
+            <span style="font-size:1.25rem;line-height:1;flex-shrink:0">⚠</span>
+            <span style="font-weight:700;font-size:var(--text-base);color:{{ s_clr }}">Обнаружено подозрительных сигналов: {{ report.signal_count }}</span>
+          </div>
+          <ul style="margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:5px">
+            {% for s in report.signals %}
+            <li style="display:flex;align-items:baseline;gap:8px;font-size:var(--text-sm)">
+              <span style="flex-shrink:0">{% if s.severity == 'high' %}⛔{% elif s.severity == 'medium' %}⚠{% else %}•{% endif %}</span>
+              <span style="flex:1;min-width:0;color:var(--c-text-1)">{{ s.title_ru }}</span>
+              <span style="font-weight:600;color:{{ s_clr }};white-space:nowrap;flex-shrink:0">−{% if s.severity == 'high' %}25{% elif s.severity == 'medium' %}12{% else %}4{% endif %}%</span>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        <!-- Detailed signal cards -->
+        {% for s in report.signals %}
           <div class="signal-card {{ s.severity }}">
             <div class="signal-header">
               <span class="signal-title">{{ s.title_ru }}</span>
@@ -169,11 +204,7 @@
               </div>
             </div>
           </div>
-          {% endfor %}
-        {% else %}
-          <div class="no-signals">
-            ✓ Очевидных несоответствий не обнаружено
-          </div>
+        {% endfor %}
         {% endif %}
 
         {% if report.signals %}
