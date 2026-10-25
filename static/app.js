@@ -288,12 +288,15 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   startProgress();
 
   const formData = new FormData();
-  // Force a filename with extension so iOS Safari / Android never sends an
-  // empty name, 'blob', or a name without a dot (which breaks backend sniffing).
-  const safeFilename = (selectedFile.name && selectedFile.name.includes('.'))
-    ? selectedFile.name
-    : (selectedFile.type === 'application/pdf' ? 'iphone_receipt.pdf' : 'iphone_receipt.jpg');
-  formData.append('file', selectedFile, safeFilename);
+  // iOS Chrome/Safari often sends files with no name or without an extension.
+  // Always provide an explicit filename with a dot so the backend's extension
+  // fallback works even when magic-byte detection returns null.
+  let uploadFile = selectedFile;
+  let uploadName = uploadFile.name || 'mobile_upload';
+  if (!uploadName.includes('.')) {
+    uploadName += (uploadFile.type === 'application/pdf') ? '.pdf' : '.jpg';
+  }
+  formData.append('file', uploadFile, uploadName);
   const context = document.getElementById('contextInput')?.value || '';
   formData.append('context', context);
 

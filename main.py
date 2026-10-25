@@ -206,15 +206,43 @@ async def share_target(
 
 
 @app.post("/analyze")
-async def analyze(
-    file: UploadFile = File(...),
-    context: Optional[str] = Form(default=""),
-    disclaimer_accepted: Optional[bool] = Form(default=True),
-    notes: Optional[str] = Form(default=None),
-):
+async def analyze(request: Request):
+    """Universal upload endpoint — bypasses FastAPI form-parameter injection
+    so iOS Chrome / Safari multipart quirks never trigger RequestValidationError."""
     tmp_path = None
     try:
-        content = await file.read()
+        # Parse form manually: accept any field name, any content-type header
+        try:
+            form = await request.form()
+        except Exception as form_err:
+            logger.warning("Form parse error: %s", form_err)
+            return JSONResponse(
+                {"error": "form_parse_error",
+                 "message": "Не удалось прочитать форму. Попробуйте ещё раз."},
+                status_code=400,
+            )
+
+        # Try common field names in priority order; fall back to first file field
+        uploaded_file = None
+        for name in ("file", "receipt", "image", "document", "upload"):
+            val = form.get(name)
+            if val is not None and hasattr(val, "read"):
+                uploaded_file = val
+                break
+        if uploaded_file is None:
+            for _, val in form.multi_items():
+                if hasattr(val, "read"):
+                    uploaded_file = val
+                    break
+
+        if uploaded_file is None:
+            return JSONResponse(
+                {"error": "no_file",
+                 "message": "Файл не найден в запросе. Выберите файл и повторите."},
+                status_code=400,
+            )
+
+        content = await uploaded_file.read()
         if len(content) > _MAX_FILE_BYTES:
             return JSONResponse(
                 {"error": "file_too_large", "message": "Файл слишком большой. Максимум 20 МБ."},
@@ -226,44 +254,35 @@ async def analyze(
                 status_code=422,
             )
 
+        # Magic-byte detection first — ignore content-type / extension claims
         detected_type = _sniff_mime(content[:16])
-        raw_name = (file.filename or "").strip()
-        # iOS/Android often send empty name, 'blob', 'image', or no extension
-        if not raw_name or raw_name.lower() in ("blob", "image", "file"):
+
+        raw_name = (getattr(uploaded_file, "filename", None) or "").strip()
+        if not raw_name or raw_name.lower() in ("blob", "image", "file", "upload"):
             raw_name = "iphone_upload.jpg"
         filename = raw_name
         ext = os.path.splitext(filename)[1].lower() or ""
+        ct = getattr(uploaded_file, "content_type", "") or ""
 
         if detected_type is None:
-            # Try extension first
             if ext in _ALLOWED_IMAGE_EXTS:
                 detected_type = "image"
             elif ext in _ALLOWED_PDF_EXTS:
                 detected_type = "pdf"
-            # Then content_type header
-            elif file.content_type and "pdf" in file.content_type:
-                detected_type = "pdf"
-                ext = ".pdf"
-            elif file.content_type and (
-                file.content_type.startswith("image/") or
-                file.content_type == "application/octet-stream"
-            ):
-                detected_type = "image"
-                ext = ".jpg"
+            elif "pdf" in ct:
+                detected_type = "pdf"; ext = ".pdf"
+            elif ct.startswith("image/") or ct == "application/octet-stream":
+                detected_type = "image"; ext = ".jpg"
             else:
-                # Last resort: treat as image — never 422 a non-empty upload
-                logger.warning(
-                    "Unknown type for %s (ct=%s), falling back to image",
-                    filename, file.content_type,
-                )
-                detected_type = "image"
-                ext = ".jpg"
+                # Absolute last resort — never reject a non-empty upload
+                logger.warning("Unknown type for '%s' (ct=%s) — treating as image", filename, ct)
+                detected_type = "image"; ext = ".jpg"
 
-        safe_ext = ext if ext else (".pdf" if detected_type == "pdf" else ".png")
+        safe_ext = ext if ext else (".pdf" if detected_type == "pdf" else ".jpg")
         tmp_path = os.path.join(tempfile.gettempdir(), f"anyk_raw_{uuid.uuid4().hex}{safe_ext}")
         with open(tmp_path, "wb") as f:
             f.write(content)
-        logger.info("Upload: %s (%d bytes, type=%s)", filename, len(content), detected_type)
+        logger.info("Upload: %s (%d bytes, type=%s, ct=%s)", filename, len(content), detected_type, ct)
 
         try:
             report = _run_analysis(tmp_path, detected_type, filename)
