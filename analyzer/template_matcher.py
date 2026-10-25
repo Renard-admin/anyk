@@ -86,6 +86,20 @@ _SEV_DELTA = {"high": 25, "medium": 12, "low": 4}
 # Image files get a base trust penalty — screenshots can be easily edited
 _IMAGE_PENALTY = 20
 
+# Kaspi color signature for screenshot recognition (Pillow-only, no OCR)
+# Kaspi brand green: #00A550 = RGB(0, 165, 80)  — success checkmark, header
+# Kaspi light green: #E6F7ED = RGB(230, 247, 237) — background accent blocks
+_KASPI_GREEN_R_MAX = 60
+_KASPI_GREEN_G_MIN = 110
+_KASPI_GREEN_B_MIN = 40
+_KASPI_GREEN_B_MAX = 130
+# Minimum ratios for positive Kaspi identification
+_KASPI_GREEN_RATIO_MIN  = 0.015   # ≥1.5% pixels match brand green
+_KASPI_WHITE_RATIO_MIN  = 0.25    # ≥25% pixels are white/near-white (receipt bg)
+# Valid portrait aspect ratio for phone screenshots/receipt images
+_KASPI_ASPECT_MIN = 1.3
+_KASPI_ASPECT_MAX = 4.0
+
 
 # ─────────────────────────── Signal factory ──────────────────────────────────
 
@@ -305,6 +319,76 @@ def _check_fingerprints(doc) -> tuple[list[dict], int]:
     return signals, bonus
 
 
+# ──────────── Image Check 7: Kaspi color signature ───────────────────────────
+
+def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
+    """
+    Detect Kaspi receipt screenshots via Kaspi brand color analysis.
+
+    Returns (is_kaspi: bool, confidence_label: str).
+    Uses only Pillow — no OCR, no extra deps. Checks for:
+      - Portrait aspect ratio (phone screenshot proportions)
+      - Kaspi green (#00A550) in ≥1.5% of pixels (success header / checkmark)
+      - White/near-white background in ≥25% of pixels (receipt paper color)
+    """
+    try:
+        from PIL import Image
+
+        img = Image.open(image_path).convert("RGB")
+        w, h = img.size
+        if w == 0:
+            return False, ""
+
+        aspect = h / w
+        if not (_KASPI_ASPECT_MIN <= aspect <= _KASPI_ASPECT_MAX):
+            return False, ""
+
+        # Downsample to ~100px wide for fast pixel scan
+        scale = min(1.0, 100.0 / w)
+        nw = max(1, int(w * scale))
+        nh = max(1, int(h * scale))
+        small = img.resize((nw, nh), Image.LANCZOS)
+        pixels = list(small.getdata())
+        total = len(pixels)
+        if total == 0:
+            return False, ""
+
+        # Kaspi brand green: R<60, G>110, B in [40..130]
+        green_count = sum(
+            1 for r, g, b in pixels
+            if r < _KASPI_GREEN_R_MAX
+            and g > _KASPI_GREEN_G_MIN
+            and _KASPI_GREEN_B_MIN <= b <= _KASPI_GREEN_B_MAX
+        )
+        # White/near-white background: R>210, G>210, B>210
+        white_count = sum(1 for r, g, b in pixels if r > 210 and g > 210 and b > 210)
+
+        green_ratio = green_count / total
+        white_ratio = white_count / total
+
+        is_kaspi = green_ratio >= _KASPI_GREEN_RATIO_MIN and white_ratio >= _KASPI_WHITE_RATIO_MIN
+
+        if is_kaspi:
+            if green_ratio >= 0.05:
+                confidence = "высокая уверенность"
+            elif green_ratio >= 0.025:
+                confidence = "средняя уверенность"
+            else:
+                confidence = "низкая уверенность"
+        else:
+            confidence = ""
+
+        logger.debug(
+            "Kaspi color check: aspect=%.2f green=%.3f%% white=%.3f%% → is_kaspi=%s",
+            aspect, green_ratio * 100, white_ratio * 100, is_kaspi,
+        )
+        return is_kaspi, confidence
+
+    except Exception as e:
+        logger.debug("Kaspi color check skipped: %s", e)
+        return False, ""
+
+
 # ─────────────────── Image Check 5: ELA ──────────────────────────────────────
 
 def _check_ela(image_path: str) -> tuple[list[dict], int]:
@@ -426,20 +510,37 @@ def _compute_trust(bonus: int, signals: list[dict]) -> tuple[int, str, str]:
     return trust_score, label, label_en
 
 
-def _compute_trust_image(signals: list[dict]) -> tuple[int, str, str]:
+def _compute_trust_image(
+    signals: list[dict],
+    is_kaspi_screenshot: bool = False,
+) -> tuple[int, str, str]:
     """Trust scoring for image files.
 
-    Images cannot be verified against the Kaspi template (no PDF structure,
-    no fingerprints). We only report when editing signals are actively found.
-    Without editing evidence we return 'not_applicable' — never 'likely_fake'
-    for a clean screenshot that simply isn't a Kaspi PDF.
+    When is_kaspi_screenshot=True (Kaspi green color signature detected),
+    starts at 87% and deducts for editing signals.
+
+    Without Kaspi color signature we only report editing signals; a clean
+    unrecognized image returns 'not_applicable' rather than 'likely_fake'.
     """
     high_sigs   = [s for s in signals if s.get("severity") == "high"]
     medium_sigs = [s for s in signals if s.get("severity") == "medium"]
 
+    if is_kaspi_screenshot:
+        # Recognized as Kaspi receipt screenshot — start at 87%
+        deduction = sum(_SEV_DELTA.get(s.get("severity", "low"), 0) for s in signals)
+        score = max(5, 87 - deduction)
+        if score >= 80:
+            return score, "Подлинный чек (Скриншот)", "authentic"
+        elif score >= 50:
+            return score, "Требует проверки", "review_needed"
+        elif score >= 25:
+            return score, "Подозрительный", "suspicious"
+        else:
+            return score, "Вероятная подделка", "likely_fake"
+
+    # Unrecognized image — only report when editing signals found
     if high_sigs:
-        # Definitive editing evidence
-        deduction = sum(_SEV_DELTA.get(s.get("severity","low"), 0) for s in signals)
+        deduction = sum(_SEV_DELTA.get(s.get("severity", "low"), 0) for s in signals)
         score = max(0, 30 - deduction)
         return score, "Вероятная подделка", "likely_fake"
 
@@ -447,11 +548,9 @@ def _compute_trust_image(signals: list[dict]) -> tuple[int, str, str]:
         return 20, "Подозрительный", "suspicious"
 
     if signals:
-        # Only low-severity findings
         return 40, "Требует проверки", "review_needed"
 
-    # No editing signals at all — image is technically clean but we can't
-    # verify it IS a Kaspi receipt without a text/template layer.
+    # No editing signals and Kaspi not recognized — cannot assess
     return 0, "Не применимо", "not_applicable"
 
 
@@ -483,6 +582,7 @@ def match_template(
     checks_run: list[str] = []
     breakdown: list[dict] = []
     image_penalty = 0
+    is_kaspi_screenshot = False  # set to True when Kaspi color signature confirmed on images
 
     def _add_sigs_to_breakdown(sigs: list[dict]) -> None:
         for s in sigs:
@@ -540,13 +640,25 @@ def match_template(
                 doc.close()
 
     elif detected_type == "image":
-        # Screenshot/image files receive a base trust penalty
-        image_penalty = _IMAGE_PENALTY
-        breakdown.append({
-            "sign": "-",
-            "delta": f"-{image_penalty}%",
-            "reason": "Тип файла: Скриншот/Изображение (коэффициент снижения доверия -20%)",
-        })
+        # Check 7 — Kaspi color signature (runs first, affects all downstream scoring)
+        is_kaspi_screenshot, kaspi_confidence = _check_kaspi_screenshot_colors(file_path)
+        checks_run.append("kaspi_color_analysis")
+
+        if is_kaspi_screenshot:
+            breakdown.append({
+                "sign": "+",
+                "delta": "+87%",
+                "reason": f"Распознан как скриншот чека Kaspi (цветовой анализ, {kaspi_confidence})",
+            })
+            image_penalty = 0  # scoring done directly from 87% base in _compute_trust_image
+        else:
+            # Unrecognized screenshot — apply base trust penalty
+            image_penalty = _IMAGE_PENALTY
+            breakdown.append({
+                "sign": "-",
+                "delta": f"-{image_penalty}%",
+                "reason": "Тип файла: Скриншот/Изображение (коэффициент снижения доверия -20%)",
+            })
 
         # Check 5 — ELA
         sigs, b = _check_ela(file_path)
@@ -566,12 +678,13 @@ def match_template(
     is_kaspi_receipt = detected_type == "pdf"
 
     if detected_type == "image":
-        trust_score, trust_label, trust_label_en = _compute_trust_image(signals)
+        trust_score, trust_label, trust_label_en = _compute_trust_image(signals, is_kaspi_screenshot)
+        is_kaspi_receipt = is_kaspi_screenshot  # True when Kaspi colors confirmed
         if trust_label_en == "not_applicable":
             breakdown.append({
                 "sign": "—",
                 "delta": "Н/Д",
-                "reason": "Проверка на шаблон Kaspi невозможна для изображений",
+                "reason": "Цвета Kaspi не обнаружены — загрузите PDF для точного анализа",
             })
     else:
         trust_score, trust_label, trust_label_en = _compute_trust(bonus - image_penalty, signals)
