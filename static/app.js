@@ -288,7 +288,12 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   startProgress();
 
   const formData = new FormData();
-  formData.append('file', selectedFile);
+  // Force a filename so mobile browsers (iOS/Android) don't send an empty or
+  // 'blob' name, which causes the backend to fail extension detection.
+  const safeName = (selectedFile.name && selectedFile.name !== 'blob')
+    ? selectedFile.name
+    : (selectedFile.type === 'application/pdf' ? 'mobile_receipt.pdf' : 'mobile_receipt.jpg');
+  formData.append('file', selectedFile, safeName);
   const context = document.getElementById('contextInput')?.value || '';
   formData.append('context', context);
 
@@ -314,6 +319,11 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
       );
     }
 
+    if (res.status === 422) {
+      throw new Error(
+        'Ошибка формата файла. Попробуйте сделать обычный скриншот или загрузить PDF.'
+      );
+    }
     if (!res.ok || data.error) {
       throw new Error(data.message || `Ошибка сервера: ${res.status}`);
     }

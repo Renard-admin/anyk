@@ -99,7 +99,10 @@ async def _handle_share_upload(request: Request, uploaded_file) -> "Response":
             return _RR(url="/?share_error=empty", status_code=303)
 
         detected_type = _sniff_mime(content[:16])
-        filename = uploaded_file.filename or "shared_receipt"
+        raw_name = (uploaded_file.filename or "").strip()
+        if not raw_name or raw_name.lower() in ("blob", "image", "file"):
+            raw_name = "shared_receipt"
+        filename = raw_name
         ext = os.path.splitext(filename)[1].lower() or ""
 
         if detected_type is None:
@@ -107,6 +110,12 @@ async def _handle_share_upload(request: Request, uploaded_file) -> "Response":
                 detected_type = "image"
             elif ext in _ALLOWED_PDF_EXTS:
                 detected_type = "pdf"
+            elif uploaded_file.content_type and "pdf" in uploaded_file.content_type:
+                detected_type = "pdf"
+                ext = ".pdf"
+            elif uploaded_file.content_type and uploaded_file.content_type.startswith("image/"):
+                detected_type = "image"
+                ext = ".jpg"
             else:
                 return _RR(url="/?share_error=format", status_code=303)
 
@@ -186,7 +195,11 @@ async def analyze(
             )
 
         detected_type = _sniff_mime(content[:16])
-        filename = file.filename or "upload"
+        raw_name = (file.filename or "").strip()
+        # Mobile browsers sometimes send empty name or 'blob' with no extension
+        if not raw_name or raw_name.lower() in ("blob", "image", "file"):
+            raw_name = "upload"
+        filename = raw_name
         ext = os.path.splitext(filename)[1].lower() or ""
 
         if detected_type is None:
@@ -194,6 +207,12 @@ async def analyze(
                 detected_type = "image"
             elif ext in _ALLOWED_PDF_EXTS:
                 detected_type = "pdf"
+            elif file.content_type and "pdf" in file.content_type:
+                detected_type = "pdf"
+                ext = ".pdf"
+            elif file.content_type and file.content_type.startswith("image/"):
+                detected_type = "image"
+                ext = ".jpg"
             else:
                 return JSONResponse(
                     {"error": "unsupported_format",
