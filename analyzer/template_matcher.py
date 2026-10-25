@@ -87,18 +87,29 @@ _SEV_DELTA = {"high": 25, "medium": 12, "low": 4}
 _IMAGE_PENALTY = 20
 
 # Kaspi color signature for screenshot recognition (Pillow-only, no OCR)
-# Kaspi brand green: #00A550 = RGB(0, 165, 80)  — success checkmark, header
-# Kaspi light green: #E6F7ED = RGB(230, 247, 237) — background accent blocks
-_KASPI_GREEN_R_MAX = 60
-_KASPI_GREEN_G_MIN = 110
-_KASPI_GREEN_B_MIN = 40
-_KASPI_GREEN_B_MAX = 130
+# Kaspi brand green:  #00A550 = RGB(0, 165, 80)  — success checkmark / header
+# Kaspi light green:  #E6F7ED = RGB(230, 247, 237) — success card background
+# Kaspi logo red:     #E31837 = RGB(227, 24, 55)   — Kaspi logo (additional signal)
+_KASPI_GREEN_R_MAX  = 60    # brand green R channel max
+_KASPI_GREEN_G_MIN  = 100   # brand green G channel min
+_KASPI_GREEN_B_MIN  = 30    # brand green B channel min
+_KASPI_GREEN_B_MAX  = 140   # brand green B channel max
+# Light-green card background: R>200, G>230, B>210, not-white (not all >240)
+_KASPI_LTGREEN_R_MIN = 200
+_KASPI_LTGREEN_G_MIN = 225
+_KASPI_LTGREEN_B_MIN = 210
+_KASPI_LTGREEN_B_MAX = 248   # below pure white (255)
+# Kaspi red logo: R>180, G<70, B<80
+_KASPI_RED_R_MIN = 180
+_KASPI_RED_G_MAX = 70
+_KASPI_RED_B_MAX = 80
 # Minimum ratios for positive Kaspi identification
-_KASPI_GREEN_RATIO_MIN  = 0.015   # ≥1.5% pixels match brand green
-_KASPI_WHITE_RATIO_MIN  = 0.25    # ≥25% pixels are white/near-white (receipt bg)
+_KASPI_GREEN_RATIO_MIN   = 0.008  # ≥0.8% brand-green pixels (checkmark can be small)
+_KASPI_LTGREEN_RATIO_MIN = 0.015  # ≥1.5% light-green bg pixels
+_KASPI_WHITE_RATIO_MIN   = 0.20   # ≥20% white/near-white (receipt paper)
 # Valid portrait aspect ratio for phone screenshots/receipt images
-_KASPI_ASPECT_MIN = 1.3
-_KASPI_ASPECT_MAX = 4.0
+_KASPI_ASPECT_MIN = 1.2
+_KASPI_ASPECT_MAX = 4.5
 
 
 # ─────────────────────────── Signal factory ──────────────────────────────────
@@ -323,13 +334,19 @@ def _check_fingerprints(doc) -> tuple[list[dict], int]:
 
 def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
     """
-    Detect Kaspi receipt screenshots via Kaspi brand color analysis.
+    Detect Kaspi receipt screenshots via multi-signal color analysis.
 
     Returns (is_kaspi: bool, confidence_label: str).
-    Uses only Pillow — no OCR, no extra deps. Checks for:
-      - Portrait aspect ratio (phone screenshot proportions)
-      - Kaspi green (#00A550) in ≥1.5% of pixels (success header / checkmark)
-      - White/near-white background in ≥25% of pixels (receipt paper color)
+    Uses only Pillow — no OCR, no extra deps.
+
+    Signals checked:
+      1. Portrait aspect ratio (phone screenshot proportions)
+      2. Kaspi brand green  #00A550 — success checkmark / progress header
+      3. Kaspi light green  #E6F7ED — success card background block
+      4. Kaspi logo red     #E31837 — Kaspi diamond logo (bonus signal)
+      5. White/near-white background (receipt paper color)
+
+    Positive identification requires white bg + (brand green OR light green).
     """
     try:
         from PIL import Image
@@ -343,8 +360,8 @@ def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
         if not (_KASPI_ASPECT_MIN <= aspect <= _KASPI_ASPECT_MAX):
             return False, ""
 
-        # Downsample to ~100px wide for fast pixel scan
-        scale = min(1.0, 100.0 / w)
+        # Downsample to ~120px wide for fast pixel scan (keeps aspect ratio)
+        scale = min(1.0, 120.0 / w)
         nw = max(1, int(w * scale))
         nh = max(1, int(h * scale))
         small = img.resize((nw, nh), Image.LANCZOS)
@@ -353,25 +370,48 @@ def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
         if total == 0:
             return False, ""
 
-        # Kaspi brand green: R<60, G>110, B in [40..130]
+        # Kaspi brand green: #00A550 — R<60, G≥100, B in [30..140]
         green_count = sum(
             1 for r, g, b in pixels
             if r < _KASPI_GREEN_R_MAX
-            and g > _KASPI_GREEN_G_MIN
+            and g >= _KASPI_GREEN_G_MIN
             and _KASPI_GREEN_B_MIN <= b <= _KASPI_GREEN_B_MAX
         )
-        # White/near-white background: R>210, G>210, B>210
-        white_count = sum(1 for r, g, b in pixels if r > 210 and g > 210 and b > 210)
+        # Kaspi light green: #E6F7ED — R≥200, G≥225, B in [210..248]
+        ltgreen_count = sum(
+            1 for r, g, b in pixels
+            if r >= _KASPI_LTGREEN_R_MIN
+            and g >= _KASPI_LTGREEN_G_MIN
+            and _KASPI_LTGREEN_B_MIN <= b <= _KASPI_LTGREEN_B_MAX
+        )
+        # Kaspi red logo: #E31837 — R≥180, G<70, B<80
+        red_count = sum(
+            1 for r, g, b in pixels
+            if r >= _KASPI_RED_R_MIN
+            and g < _KASPI_RED_G_MAX
+            and b < _KASPI_RED_B_MAX
+        )
+        # White/near-white background: R>215, G>215, B>215
+        white_count = sum(1 for r, g, b in pixels if r > 215 and g > 215 and b > 215)
 
-        green_ratio = green_count / total
-        white_ratio = white_count / total
+        green_ratio   = green_count / total
+        ltgreen_ratio = ltgreen_count / total
+        red_ratio     = red_count / total
+        white_ratio   = white_count / total
 
-        is_kaspi = green_ratio >= _KASPI_GREEN_RATIO_MIN and white_ratio >= _KASPI_WHITE_RATIO_MIN
+        has_green   = green_ratio   >= _KASPI_GREEN_RATIO_MIN
+        has_ltgreen = ltgreen_ratio >= _KASPI_LTGREEN_RATIO_MIN
+        has_white   = white_ratio   >= _KASPI_WHITE_RATIO_MIN
+        has_red     = red_ratio     >= 0.003  # small logo, just need presence
+
+        # Core rule: white bg + (brand green OR light green)
+        is_kaspi = has_white and (has_green or has_ltgreen)
 
         if is_kaspi:
-            if green_ratio >= 0.05:
+            signals_found = sum([has_green, has_ltgreen, has_red])
+            if signals_found >= 3 or (has_green and green_ratio >= 0.04):
                 confidence = "высокая уверенность"
-            elif green_ratio >= 0.025:
+            elif signals_found >= 2:
                 confidence = "средняя уверенность"
             else:
                 confidence = "низкая уверенность"
@@ -379,8 +419,10 @@ def _check_kaspi_screenshot_colors(image_path: str) -> tuple[bool, str]:
             confidence = ""
 
         logger.debug(
-            "Kaspi color check: aspect=%.2f green=%.3f%% white=%.3f%% → is_kaspi=%s",
-            aspect, green_ratio * 100, white_ratio * 100, is_kaspi,
+            "Kaspi color: aspect=%.2f green=%.3f%% ltgreen=%.3f%% red=%.3f%% "
+            "white=%.3f%% → is_kaspi=%s conf=%r",
+            aspect, green_ratio * 100, ltgreen_ratio * 100,
+            red_ratio * 100, white_ratio * 100, is_kaspi, confidence,
         )
         return is_kaspi, confidence
 

@@ -49,18 +49,19 @@
 <!-- Legal modal / Disclaimer -->
 <div class="modal-backdrop" id="termsModal" role="dialog" aria-modal="true" aria-labelledby="termsTitle" hidden>
   <div class="modal-box">
-    <h2 class="modal-title" id="termsTitle">Уведомление об ограничениях</h2>
+    <h2 class="modal-title" id="termsTitle">Условия использования и отказ от ответственности</h2>
     <div class="modal-body">
-      <p>Инструмент «АНЫҚ» предназначен исключительно для автоматизации предварительного технического анализа платёжных документов. Система выполняет вспомогательную функцию и <strong>не является</strong> экспертным юридическим или финансовым заключением.</p>
-      <p>Сервис и его разработчики не несут ответственности за любые решения, принятые пользователем на основе результатов анализа. Загружаемые файлы не сохраняются и не передаются третьим лицам.</p>
-      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface-2)">
+      <p>Сервис «АНЫҚ» предоставляет <strong>вероятностную оценку подлинности документов</strong> на основе алгоритмического анализа структуры и визуальных паттернов. Результаты анализа <strong>не являются</strong> судебной экспертизой, юридическим или финансовым заключением.</p>
+      <p>Разработчики и сервис <strong>не несут юридической и финансовой ответственности</strong> за любые решения, принятые пользователем на основе результатов анализа. Загружаемые файлы обрабатываются локально и не сохраняются на серверах.</p>
+      <p style="font-size:var(--text-sm);color:var(--c-text-2)">Система не устанавливает факт транзакции, не верифицирует личность отправителя и не является инструментом правовой защиты. Окончательное решение всегда принимает аналитик или уполномоченное лицо.</p>
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:12px;border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface-2);margin-top:8px">
         <input type="checkbox" id="termsCheckbox"
                style="margin-top:2px;flex-shrink:0;width:18px;height:18px;cursor:pointer;accent-color:var(--c-text-1)"
-               aria-label="Я ознакомился(ась) с ограничениями">
-        <span style="font-size:var(--text-sm);color:var(--c-text-1);line-height:1.5">Я ознакомился(ась) с ограничениями системы и принимаю их</span>
+               aria-label="Я принимаю условия использования">
+        <span style="font-size:var(--text-sm);color:var(--c-text-1);line-height:1.5">Я принимаю условия использования и снимаю ответственность с разработчиков за свои решения</span>
       </label>
     </div>
-    <button class="btn-primary modal-accept" id="termsAccept" disabled>Продолжить →</button>
+    <button class="btn-primary modal-accept" id="termsAccept" disabled>Согласен →</button>
   </div>
 </div>
 
@@ -231,7 +232,13 @@
       document.getElementById('analyzeForm').dispatchEvent(new Event('_termsAccepted'));
     });
   }
+  // Escape closes without accepting (user must accept to proceed)
   modal.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  // Auto-open on page load if not yet accepted
+  if (!accepted) {
+    setTimeout(openModal, 200);
+  }
 
   const form = document.getElementById('analyzeForm');
   if (form) {
