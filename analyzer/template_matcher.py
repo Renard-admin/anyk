@@ -407,6 +407,7 @@ def _check_exif(image_path: str) -> tuple[list[dict], int]:
 # ─────────────────────── Trust score ─────────────────────────────────────────
 
 def _compute_trust(bonus: int, signals: list[dict]) -> tuple[int, str, str]:
+    """Trust scoring for PDF documents (full template check available)."""
     deduction = sum(
         _SEV_DELTA.get(s.get("severity", "low"), 0)
         for s in signals
@@ -423,6 +424,35 @@ def _compute_trust(bonus: int, signals: list[dict]) -> tuple[int, str, str]:
         label, label_en = "Вероятная подделка", "likely_fake"
 
     return trust_score, label, label_en
+
+
+def _compute_trust_image(signals: list[dict]) -> tuple[int, str, str]:
+    """Trust scoring for image files.
+
+    Images cannot be verified against the Kaspi template (no PDF structure,
+    no fingerprints). We only report when editing signals are actively found.
+    Without editing evidence we return 'not_applicable' — never 'likely_fake'
+    for a clean screenshot that simply isn't a Kaspi PDF.
+    """
+    high_sigs   = [s for s in signals if s.get("severity") == "high"]
+    medium_sigs = [s for s in signals if s.get("severity") == "medium"]
+
+    if high_sigs:
+        # Definitive editing evidence
+        deduction = sum(_SEV_DELTA.get(s.get("severity","low"), 0) for s in signals)
+        score = max(0, 30 - deduction)
+        return score, "Вероятная подделка", "likely_fake"
+
+    if medium_sigs:
+        return 20, "Подозрительный", "suspicious"
+
+    if signals:
+        # Only low-severity findings
+        return 40, "Требует проверки", "review_needed"
+
+    # No editing signals at all — image is technically clean but we can't
+    # verify it IS a Kaspi receipt without a text/template layer.
+    return 0, "Не применимо", "not_applicable"
 
 
 # ─────────────────────────── Public API ──────────────────────────────────────
@@ -532,7 +562,19 @@ def match_template(
             breakdown.append({"sign": "+", "delta": f"+{b}%", "reason": "EXIF: следов редактирования не обнаружено"})
         _add_sigs_to_breakdown(sigs)
 
-    trust_score, trust_label, trust_label_en = _compute_trust(bonus - image_penalty, signals)
+    # --- Trust computation ---
+    is_kaspi_receipt = detected_type == "pdf"
+
+    if detected_type == "image":
+        trust_score, trust_label, trust_label_en = _compute_trust_image(signals)
+        if trust_label_en == "not_applicable":
+            breakdown.append({
+                "sign": "—",
+                "delta": "Н/Д",
+                "reason": "Проверка на шаблон Kaspi невозможна для изображений",
+            })
+    else:
+        trust_score, trust_label, trust_label_en = _compute_trust(bonus - image_penalty, signals)
 
     elapsed_ms = (time.time() - t0) * 1000
     logger.info(
@@ -555,4 +597,5 @@ def match_template(
         "trust_disclaimer": _DISCLAIMER,
         "checks_run": checks_run,
         "elapsed_ms": round(elapsed_ms, 1),
+        "is_kaspi_receipt": is_kaspi_receipt,
     }

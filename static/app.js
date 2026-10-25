@@ -56,10 +56,8 @@ function isMobileDevice() {
          (window.innerWidth <= 768 && ('ontouchstart' in window));
 }
 
-if (isMobileDevice()) {
-  mobileCaptureHint.style.display = 'flex';
-} else {
-  mobileCaptureHint.style.display = 'none';
+if (mobileCaptureHint) {
+  mobileCaptureHint.style.display = isMobileDevice() ? 'flex' : 'none';
 }
 
 // ── Paste hint: show Cmd+V on macOS ──────────────────────────────────────────
@@ -125,11 +123,11 @@ function clearFile() {
   clearError();
 }
 
-fileInput.addEventListener('change', () => {
+if (fileInput) fileInput.addEventListener('change', () => {
   if (fileInput.files[0]) setFile(fileInput.files[0]);
 });
 
-removeBtn.addEventListener('click', (e) => {
+if (removeBtn) removeBtn.addEventListener('click', (e) => {
   e.preventDefault();
   e.stopPropagation();
   clearFile();
@@ -137,37 +135,39 @@ removeBtn.addEventListener('click', (e) => {
 
 // ── Keyboard navigation for upload zone ──────────────────────────────────────
 
-uploadZone.addEventListener('keydown', (e) => {
+if (uploadZone) uploadZone.addEventListener('keydown', (e) => {
   if ((e.key === 'Enter' || e.key === ' ') && !uploadZone.classList.contains('has-file')) {
     e.preventDefault();
-    fileInput.click();
+    if (fileInput) fileInput.click();
   }
 });
 
-uploadZone.addEventListener('click', (e) => {
+if (uploadZone) uploadZone.addEventListener('click', (e) => {
   // Don't open file dialog when clicking preview buttons
-  if (e.target === removeBtn || removeBtn.contains(e.target)) return;
+  if (removeBtn && (e.target === removeBtn || removeBtn.contains(e.target))) return;
   if (uploadZone.classList.contains('has-file')) return;
-  fileInput.click();
+  if (fileInput) fileInput.click();
 });
 
 // ── Drag & drop ───────────────────────────────────────────────────────────────
 
-uploadZone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  uploadZone.classList.add('drag-over');
-});
-uploadZone.addEventListener('dragleave', (e) => {
-  if (!uploadZone.contains(e.relatedTarget)) {
+if (uploadZone) {
+  uploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadZone.classList.add('drag-over');
+  });
+  uploadZone.addEventListener('dragleave', (e) => {
+    if (!uploadZone.contains(e.relatedTarget)) {
+      uploadZone.classList.remove('drag-over');
+    }
+  });
+  uploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
     uploadZone.classList.remove('drag-over');
-  }
-});
-uploadZone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  uploadZone.classList.remove('drag-over');
-  const file = e.dataTransfer.files[0];
-  if (file) setFile(file);
-});
+    const file = e.dataTransfer?.files?.[0];
+    if (file) setFile(file);
+  });
+}
 
 // ── Clipboard paste (Ctrl+V / Cmd+V) ─────────────────────────────────────────
 
@@ -190,7 +190,8 @@ function _handlePasteItems(clipboardItems) {
 }
 
 function _onPasteEvent(e) {
-  const target = e.target;
+  const target = e?.target;
+  if (!target) return;
   if (
     target.tagName === 'TEXTAREA' ||
     target.tagName === 'INPUT' ||
@@ -206,7 +207,7 @@ function _onPasteEvent(e) {
 
 // Listen on document AND uploadZone so paste works regardless of focus state
 document.addEventListener('paste', _onPasteEvent);
-uploadZone.addEventListener('paste', _onPasteEvent);
+if (uploadZone) uploadZone.addEventListener('paste', _onPasteEvent);
 
 // Paste button — uses Clipboard API for browsers where paste event needs a click
 const pasteBtn = document.getElementById('pasteBtn');
@@ -238,11 +239,9 @@ if (pasteBtn) {
 // ── Mobile camera ─────────────────────────────────────────────────────────────
 
 if (cameraBtn && cameraInput) {
-  cameraBtn.addEventListener('click', () => {
-    cameraInput.click();
-  });
+  cameraBtn.addEventListener('click', () => { cameraInput.click(); });
   cameraInput.addEventListener('change', () => {
-    if (cameraInput.files[0]) setFile(cameraInput.files[0]);
+    if (cameraInput.files?.[0]) setFile(cameraInput.files[0]);
   });
 }
 
@@ -279,18 +278,18 @@ function stopProgress() {
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
-analyzeForm.addEventListener('submit', async (e) => {
+if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!selectedFile) return;
 
   clearError();
-  formSection.style.display = 'none';
-  progressScreen.hidden = false;
+  if (formSection) formSection.style.display = 'none';
+  if (progressScreen) progressScreen.hidden = false;
   startProgress();
 
   const formData = new FormData();
   formData.append('file', selectedFile);
-  const context = document.getElementById('contextInput').value;
+  const context = document.getElementById('contextInput')?.value || '';
   formData.append('context', context);
 
   try {
@@ -323,8 +322,8 @@ analyzeForm.addEventListener('submit', async (e) => {
     window.location.href = `/report/${data.report_id}`;
   } catch (err) {
     stopProgress();
-    progressScreen.hidden = true;
-    formSection.style.display = '';
+    if (progressScreen) progressScreen.hidden = true;
+    if (formSection) formSection.style.display = '';
     showError(`Ошибка анализа: ${err.message}`);
   }
 });

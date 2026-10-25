@@ -36,28 +36,40 @@ def build_report(
     source_type = "pdf" if pdf_info else "image"
     checks_run = template_result.get("checks_run", [])
 
+    trust_label_en = template_result.get("trust_label_en", "")
+    is_kaspi_receipt = template_result.get("is_kaspi_receipt", source_type == "pdf")
+
+    # Override risk to "uncertain" when we can't determine authenticity
+    if trust_label_en == "not_applicable":
+        effective_risk_level    = "uncertain"
+        effective_risk_level_ru = "Не опознано как чек Kaspi"
+    else:
+        effective_risk_level    = risk["level"]
+        effective_risk_level_ru = risk["level_ru"]
+
     report = {
-        "report_id":        str(uuid.uuid4()),
-        "timestamp":        datetime.now(timezone.utc).isoformat(),
-        "image_filename":   image_filename,
-        "source_type":      source_type,
-        "ocr_source":       "template_matching",
-        "risk_level":       risk["level"],
-        "risk_level_ru":    risk["level_ru"],
-        "risk_score":       risk["score"],
-        "trust_score":      template_result.get("trust_score", 0),
-        "trust_label":      template_result.get("trust_label", ""),
-        "trust_label_en":   template_result.get("trust_label_en", ""),
-        "trust_explanation": template_result.get("trust_explanation", ""),
-        "trust_disclaimer": template_result.get("trust_disclaimer", _DISCLAIMER),
-        "signals":          signals,
-        "ocr_text":         "",
-        "ocr_confidence":   1.0,
-        "signal_count":     len(signals),
-        "context_provided": False,
-        "disclaimer_ru":    _DISCLAIMER,
-        "analysis_methods": checks_run,
-        "elapsed_ms":       template_result.get("elapsed_ms", 0),
+        "report_id":          str(uuid.uuid4()),
+        "timestamp":          datetime.now(timezone.utc).isoformat(),
+        "image_filename":     image_filename,
+        "source_type":        source_type,
+        "ocr_source":         "template_matching",
+        "risk_level":         effective_risk_level,
+        "risk_level_ru":      effective_risk_level_ru,
+        "risk_score":         risk["score"],
+        "trust_score":        template_result.get("trust_score", 0),
+        "trust_label":        template_result.get("trust_label", ""),
+        "trust_label_en":     trust_label_en,
+        "trust_explanation":  template_result.get("trust_explanation", []),
+        "trust_disclaimer":   template_result.get("trust_disclaimer", _DISCLAIMER),
+        "is_kaspi_receipt":   is_kaspi_receipt,
+        "signals":            signals,
+        "ocr_text":           "",
+        "ocr_confidence":     1.0,
+        "signal_count":       len(signals),
+        "context_provided":   False,
+        "disclaimer_ru":      _DISCLAIMER,
+        "analysis_methods":   checks_run,
+        "elapsed_ms":         template_result.get("elapsed_ms", 0),
     }
 
     if pdf_info:

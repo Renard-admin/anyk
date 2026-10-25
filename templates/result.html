@@ -45,6 +45,20 @@
 <main class="main">
   <div class="container result-container">
 
+    <!-- "Not Kaspi" notice for plain images -->
+    {% if not report.is_kaspi_receipt and report.trust_label_en == 'not_applicable' %}
+    <div class="info-block yellow" style="margin-bottom:var(--sp-5)">
+      <h3 style="color:var(--c-warn-text)">⚠ Не опознано как чек Kaspi</h3>
+      <p style="color:var(--c-text-2);margin-top:var(--sp-2)">
+        Загруженный файл является изображением (PNG/JPG). Без текстового слоя PDF система не может
+        сверить его со структурой подлинного чека Kaspi Bank. Проверка подлинности по шаблону невозможна.
+      </p>
+      <p style="margin-top:var(--sp-2);color:var(--c-text-2)">
+        Для точного анализа загрузите <strong>PDF-квитанцию</strong> из приложения Kaspi.kz («Поделиться» → «PDF»).
+      </p>
+    </div>
+    {% endif %}
+
     <!-- 1. Status banner -->
     <div class="status-banner {{ report.risk_level }}" role="status">
       <div>
@@ -53,7 +67,8 @@
           {% if report.signal_count > 0 %}
             Найдено {{ report.signal_count }} сигнал{% if report.signal_count == 1 %}{% elif report.signal_count < 5 %}а{% else %}ов{% endif %}
           {% else %}
-            Несоответствий не обнаружено
+            {% if report.trust_label_en == 'not_applicable' %}Тип документа не поддерживается для полного анализа
+            {% else %}Несоответствий не обнаружено{% endif %}
           {% endif %}
         </div>
       </div>
@@ -61,6 +76,7 @@
         {% if report.risk_level == 'high' %}ВЫСОКИЙ
         {% elif report.risk_level == 'medium' %}СРЕДНИЙ
         {% elif report.risk_level == 'clear' %}ЧИСТО
+        {% elif report.risk_level == 'uncertain' %}Н/Д
         {% else %}—{% endif %}
       </span>
     </div>
@@ -68,6 +84,16 @@
     <!-- 2. Trust Index -->
     <div class="trust-panel">
       <div class="trust-score-wrap">
+        {% if report.trust_label_en == 'not_applicable' %}
+        <!-- N/A ring for unrecognized images -->
+        <div class="trust-ring" style="--pct:0;--ring-color:var(--c-muted)"
+             aria-label="Индекс доверия неприменим">
+          <div class="trust-ring-inner">
+            <span class="trust-pct" style="font-size:var(--text-lg)">Н/Д</span>
+            <span class="trust-label-text">Неприменимо</span>
+          </div>
+        </div>
+        {% else %}
         <!-- Circular gauge: --pct drives conic-gradient -->
         <div class="trust-ring {{ report.trust_label_en }}"
              style="--pct:{{ report.trust_score }}"
@@ -77,9 +103,10 @@
             <span class="trust-label-text">Доверие</span>
           </div>
         </div>
+        {% endif %}
         <div class="trust-meta">
           <h2 class="trust-heading">Индекс соответствия документа</h2>
-          <div class="trust-badge {{ report.trust_label_en }}">{{ report.trust_label }}</div>
+          <div class="trust-badge {{ 'medium' if report.trust_label_en == 'not_applicable' else report.trust_label_en }}">{{ report.trust_label }}</div>
           <ul class="trust-breakdown" aria-label="Расчёт индекса доверия">
             {% for item in report.trust_explanation %}
             <li class="trust-item {{ 'bonus' if item.sign == '+' else 'deduct' }}">
