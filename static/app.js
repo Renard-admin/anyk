@@ -278,6 +278,49 @@ function stopProgress() {
 
 // ── Form submit ───────────────────────────────────────────────────────────────
 
+// ── Client-side magic-bytes normaliser ───────────────────────────────────────
+// Reads the raw bytes of any File/Blob and returns a new File object whose
+// name and MIME type are derived from the actual content signatures.
+// This bypasses iOS Safari/Chrome wrapping files as application/octet-stream
+// or sending empty/extensionless filenames.
+async function prepareFileForUpload(file) {
+  let arrayBuffer;
+  try {
+    arrayBuffer = await file.arrayBuffer();
+  } catch {
+    return file; // can't read — send as-is and let the backend handle it
+  }
+  const bytes = new Uint8Array(arrayBuffer);
+
+  let ext      = 'jpg';
+  let mimeType = 'image/jpeg';
+
+  // %PDF
+  if (bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46) {
+    ext = 'pdf'; mimeType = 'application/pdf';
+  }
+  // \x89PNG
+  else if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47) {
+    ext = 'png'; mimeType = 'image/png';
+  }
+  // JPEG \xff\xd8\xff
+  else if (bytes[0] === 0xFF && bytes[1] === 0xD8 && bytes[2] === 0xFF) {
+    ext = 'jpg'; mimeType = 'image/jpeg';
+  }
+  // WEBP: RIFF....WEBP
+  else if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+           bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    ext = 'webp'; mimeType = 'image/webp';
+  }
+  // HEIC/HEIF: ftyp box at offset 4
+  else if (bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    ext = 'jpg'; mimeType = 'image/jpeg'; // convert label — server handles HEIC via Pillow
+  }
+
+  const safeFilename = `iphone_upload_${Date.now()}.${ext}`;
+  return new File([arrayBuffer], safeFilename, { type: mimeType });
+}
+
 if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!selectedFile) return;
@@ -287,16 +330,10 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
   if (progressScreen) progressScreen.hidden = false;
   startProgress();
 
+  // Normalise file: re-wrap with correct name + MIME derived from magic bytes
+  const uploadFile = await prepareFileForUpload(selectedFile);
   const formData = new FormData();
-  // iOS Chrome/Safari often sends files with no name or without an extension.
-  // Always provide an explicit filename with a dot so the backend's extension
-  // fallback works even when magic-byte detection returns null.
-  let uploadFile = selectedFile;
-  let uploadName = uploadFile.name || 'mobile_upload';
-  if (!uploadName.includes('.')) {
-    uploadName += (uploadFile.type === 'application/pdf') ? '.pdf' : '.jpg';
-  }
-  formData.append('file', uploadFile, uploadName);
+  formData.append('file', uploadFile, uploadFile.name);
   const context = document.getElementById('contextInput')?.value || '';
   formData.append('context', context);
 
