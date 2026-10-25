@@ -2,11 +2,13 @@ import os
 import uuid
 import logging
 import tempfile
+from typing import Optional
 
 from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse, FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -15,6 +17,19 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="АНЫҚ", description="Анализатор платёжных скриншотов")
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.warning("RequestValidationError on %s: %s", request.url.path, exc.errors())
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": "form_validation_error",
+            "message": "Ошибка формата данных. Попробуйте сделать обычный скриншот или загрузить PDF.",
+        },
+    )
+
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -178,7 +193,9 @@ async def share_target(
 @app.post("/analyze")
 async def analyze(
     file: UploadFile = File(...),
-    context: str = Form(default=""),
+    context: Optional[str] = Form(default=""),
+    disclaimer_accepted: Optional[bool] = Form(default=True),
+    notes: Optional[str] = Form(default=None),
 ):
     tmp_path = None
     try:

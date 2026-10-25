@@ -319,10 +319,9 @@ if (analyzeForm) analyzeForm.addEventListener('submit', async (e) => {
       );
     }
 
-    if (res.status === 422) {
-      throw new Error(
-        'Ошибка формата файла. Попробуйте сделать обычный скриншот или загрузить PDF.'
-      );
+    if (res.status === 422 || res.status === 400) {
+      const msg = data?.message || 'Ошибка формата файла. Попробуйте сделать обычный скриншот или загрузить PDF.';
+      throw new Error(msg);
     }
     if (!res.ok || data.error) {
       throw new Error(data.message || `Ошибка сервера: ${res.status}`);
