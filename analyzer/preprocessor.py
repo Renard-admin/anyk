@@ -20,12 +20,24 @@ def preprocess(image_path: str) -> str:
         pass
 
     w, h = img.size
+
+    # Upscale tiny images for OCR legibility
     min_side = min(w, h)
     if min_side < 640:
         scale = 640 / min_side
         new_w, new_h = int(w * scale), int(h * scale)
         img = img.resize((new_w, new_h), Image.LANCZOS)
         logger.info("Upscaled %dx%d → %dx%d", w, h, new_w, new_h)
+        w, h = new_w, new_h
+
+    # Cap longest side at 1500px — prevents 9-minute EasyOCR runs on 1 vCPU
+    MAX_SIDE = 1500
+    max_side = max(w, h)
+    if max_side > MAX_SIDE:
+        scale = MAX_SIDE / max_side
+        new_w, new_h = int(w * scale), int(h * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+        logger.info("Downscaled %dx%d → %dx%d (max_side=%d)", w, h, new_w, new_h, MAX_SIDE)
 
     # Grayscale
     gray = img.convert("L")

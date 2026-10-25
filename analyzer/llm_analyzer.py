@@ -57,7 +57,7 @@ USER_PROMPT_TEMPLATE = """OCR-ТЕКСТ СКРИНШОТА:
 
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash-lite:generateContent"
+    "gemini-1.5-flash:generateContent"
 )
 
 

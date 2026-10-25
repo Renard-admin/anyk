@@ -9,7 +9,7 @@ OCR engine with three-tier graceful fallback:
             (the pdf_ingestor sets source="pdf_text_layer"); this tier
             is only reached for image inputs that somehow skip Tier 1.
 
-  Tier 3 — Gemini Vision API (gemini-2.0-flash-lite)
+  Tier 3 — Gemini Vision API (gemini-1.5-flash)
             Triggered when EasyOCR is unavailable (Vercel / serverless)
             AND the input is a rasterised image (scan / screenshot).
             Requires GEMINI_API_KEY in the environment.
@@ -17,6 +17,7 @@ OCR engine with three-tier graceful fallback:
 from __future__ import annotations
 
 import base64
+import concurrent.futures
 import json
 import logging
 import os
@@ -65,9 +66,18 @@ def _get_reader():
     return _reader
 
 
+_OCR_TIMEOUT_S = 45  # seconds before we give up and fall back to Gemini
+
+
 def _ocr_easyocr(image_path: str) -> dict:
     reader = _get_reader()
-    results = reader.readtext(image_path)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(reader.readtext, image_path)
+        try:
+            results = future.result(timeout=_OCR_TIMEOUT_S)
+        except concurrent.futures.TimeoutError:
+            logger.warning("EasyOCR timed out after %ds — falling back to Gemini", _OCR_TIMEOUT_S)
+            raise TimeoutError("EasyOCR timeout")
     regions = [
         {"text": text, "confidence": float(conf), "bbox": bbox}
         for bbox, text, conf in results
@@ -84,7 +94,7 @@ def _ocr_easyocr(image_path: str) -> dict:
 
 _GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash-lite:generateContent"
+    "gemini-1.5-flash:generateContent"
 )
 
 _GEMINI_PROMPT = (
@@ -169,6 +179,9 @@ def extract_text(image_path: str) -> dict:
     if _EASYOCR_OK:
         try:
             result = _ocr_easyocr(image_path)
+        except TimeoutError:
+            logger.warning("EasyOCR timed out — falling back to Gemini")
+            result = _ocr_gemini(image_path)
         except Exception as e:
             logger.warning("EasyOCR failed (%s) — falling back to Gemini", e)
             result = _ocr_gemini(image_path)

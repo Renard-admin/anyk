@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_FILE_BYTES = 20 * 1024 * 1024  # 20 MB
 _MAX_PAGES = 5
-_RENDER_SCALE = 2.5  # 72dpi × 2.5 = 180dpi — good for EasyOCR
+_RENDER_SCALE = 2.08  # 72dpi × 2.08 ≈ 150dpi — sufficient for EasyOCR, 40% fewer pixels
 
 
 def _parse_pdf_date(raw: str) -> str | None:
