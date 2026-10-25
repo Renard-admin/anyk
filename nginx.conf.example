@@ -5,10 +5,11 @@ server {
     # Accept large PDF / image uploads
     client_max_body_size 20M;
 
-    # Generous timeouts — OCR on 1 vCPU can take 30-60 s
-    proxy_read_timeout    120s;
-    proxy_connect_timeout  10s;
-    proxy_send_timeout    120s;
+    # Generous timeouts — OCR on 1 vCPU can take up to 120 s
+    proxy_connect_timeout 300s;
+    proxy_send_timeout    300s;
+    proxy_read_timeout    300s;
+    fastcgi_read_timeout  300s;
 
     # Forward all requests to Uvicorn
     location / {

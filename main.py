@@ -279,31 +279,36 @@ async def analyze(
                 }
                 logger.info("PDF has text layer (%d chars)", len(combined_text))
 
-                # Hybrid mode for Chrome PDFs: cross-check with OCR
+                # Hybrid mode for Chrome PDFs: only fall back to OCR when the
+                # text layer is genuinely sparse (< 20 chars), otherwise skip
+                # EasyOCR entirely to avoid 504 on 1 vCPU servers.
                 if pdf_info.get("needs_hybrid") and pdf_image_paths:
-                    from analyzer.preprocessor import preprocess
-                    from analyzer.ocr_engine import extract_text
-                    tmp_pre = preprocess(pdf_image_paths[0])
-                    ocr_fallback = extract_text(tmp_pre)
-                    # Use OCR text if it captured significantly more words
-                    ocr_words = ocr_fallback.get("word_count", 0)
                     text_words = ocr_result["word_count"]
-                    if ocr_words > text_words * 1.3:
-                        ocr_result["raw_text"] = ocr_fallback["raw_text"]
-                        ocr_result["regions"] = ocr_fallback.get("regions", [])
-                        ocr_result["mean_confidence"] = ocr_fallback["mean_confidence"]
-                        ocr_result["source"] = "hybrid_chrome_ocr"
-                        ocr_result["word_count"] = ocr_words
-                        logger.info("Chrome hybrid: OCR captured more text (%d > %d), using OCR",
-                                    ocr_words, text_words)
+                    text_chars = len(ocr_result["raw_text"])
+                    if text_chars >= 20:
+                        logger.info(
+                            "Chrome hybrid: text layer sufficient (%d chars, %d words) — skipping OCR",
+                            text_chars, text_words,
+                        )
                     else:
-                        logger.info("Chrome hybrid: text layer sufficient (%d words)", text_words)
-                    if tmp_pre and tmp_pre not in pdf_image_paths:
-                        try:
-                            os.unlink(tmp_pre)
-                        except OSError:
-                            pass
-                        tmp_pre = None
+                        from analyzer.preprocessor import preprocess
+                        from analyzer.ocr_engine import extract_text
+                        tmp_pre = preprocess(pdf_image_paths[0])
+                        ocr_fallback = extract_text(tmp_pre)
+                        ocr_words = ocr_fallback.get("word_count", 0)
+                        if ocr_words > text_words * 1.3:
+                            ocr_result["raw_text"] = ocr_fallback["raw_text"]
+                            ocr_result["regions"] = ocr_fallback.get("regions", [])
+                            ocr_result["mean_confidence"] = ocr_fallback["mean_confidence"]
+                            ocr_result["source"] = "hybrid_chrome_ocr"
+                            ocr_result["word_count"] = ocr_words
+                            logger.info("Chrome hybrid: sparse text layer — using OCR (%d words)", ocr_words)
+                        if tmp_pre and tmp_pre not in pdf_image_paths:
+                            try:
+                                os.unlink(tmp_pre)
+                            except OSError:
+                                pass
+                            tmp_pre = None
             else:
                 # Run OCR on first page image
                 from analyzer.preprocessor import preprocess
